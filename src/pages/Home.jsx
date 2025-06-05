@@ -23,9 +23,7 @@ function Home() {
   const lastLoadedRef = useRef({});
   const [downloadId, setDownloadId] = useState(null);
   const [formatFilter, setFormatFilter] = useState("all"); // 1. Add format filter tabs state
-  const proxiedThumbnail = `https://videold-backend.onrender.com/api/proxy?url=${encodeURIComponent(videoInfo.thumbnail)}`;
-
-
+ 
 
   const socketRef = useRef();
 
@@ -664,7 +662,12 @@ function Home() {
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
               {videoInfo.thumbnail && (
                 <div className="relative w-64 rounded-xl shadow-md overflow-hidden group">
-                   <img src={proxiedUrl} alt="Media" />
+                  <img
+                    src={`https://videold-backend.onrender.com/api/proxy?url=${encodeURIComponent(
+                      videoInfo.thumbnail
+                    )}`}
+                    alt="Media"
+                  />
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition">
                     <FontAwesomeIcon
                       icon={faPlay}
