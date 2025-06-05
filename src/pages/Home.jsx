@@ -5,6 +5,9 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faDownload, faPlay } from "@fortawesome/free-solid-svg-icons";
 import Howto from "../components/Howto";
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_URL;
+
 function Home() {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,7 +28,7 @@ function Home() {
 
   useEffect(() => {
     // Initialize socket only once
-    socketRef.current = io("http://localhost:3000");
+    socketRef.current = io(SOCKET_URL);
 
     // When connected, emit join with downloadId if available
     socketRef.current.on("connect", () => {
@@ -53,9 +56,7 @@ function Home() {
     setSelectedVideos(new Set());
 
     try {
-      const res = await axios.post("http://localhost:3000/api/downloads", {
-        url,
-      });
+      const res = await axios.post(`${API_URL}/api/downloads`, { url });
 
       if (res.data.isPlaylist) {
         setIsPlaylist(true);
@@ -107,12 +108,7 @@ function Home() {
     let socketProgressHandler;
     try {
       // Always get a fresh downloadId and filename
-      const initRes = await axios.post(
-        "http://localhost:3000/api/init-download",
-        {
-          url,
-        }
-      );
+      const initRes = await axios.post(`${API_URL}/api/init-download`, { url });
       const downloadIdToUse = initRes.data.downloadId;
       const filename = initRes.data.filename;
       // Join the socket room for this downloadId immediately
@@ -126,7 +122,7 @@ function Home() {
       socketRef.current.on("progress", socketProgressHandler);
 
       const res = await axios.post(
-        "http://localhost:3000/api/downloads",
+        `${API_URL}/api/downloads`,
         {
           url,
           quality:
@@ -222,7 +218,7 @@ function Home() {
     try {
       // 1. Get a downloadId for this multi-download
       const initRes = await axios.post(
-        "http://localhost:3000/api/init-download",
+        `${API_URL}/api/init-download`,
         {
           url: url, // pass the playlist url for context
           isZip: true,
@@ -239,7 +235,7 @@ function Home() {
 
       // 4. Start the download request
       const res = await axios.post(
-        "http://localhost:3000/api/multi-downloads",
+        `${API_URL}/api/multi-downloads`,
         { videos: videosToDownload, downloadId: downloadIdToUse },
         {
           responseType: "blob",
