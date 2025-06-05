@@ -23,6 +23,9 @@ function Home() {
   const lastLoadedRef = useRef({});
   const [downloadId, setDownloadId] = useState(null);
   const [formatFilter, setFormatFilter] = useState("all"); // 1. Add format filter tabs state
+const mediaUrl = videoInfo?.thumbnail || "";
+const proxiedUrl = `/api/proxy?url=${encodeURIComponent(mediaUrl)}`;
+
 
   const socketRef = useRef();
 
@@ -217,13 +220,10 @@ function Home() {
     let filename = "videos";
     try {
       // 1. Get a downloadId for this multi-download
-      const initRes = await axios.post(
-        `${API_URL}/api/init-download`,
-        {
-          url: url, // pass the playlist url for context
-          isZip: true,
-        }
-      );
+      const initRes = await axios.post(`${API_URL}/api/init-download`, {
+        url: url, // pass the playlist url for context
+        isZip: true,
+      });
       downloadIdToUse = initRes.data.downloadId;
       filename = initRes.data.filename || "videos";
       // 2. Join the socket room for this downloadId
@@ -664,11 +664,7 @@ function Home() {
             <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
               {videoInfo.thumbnail && (
                 <div className="relative w-64 rounded-xl shadow-md overflow-hidden group">
-                  <img
-                    src={videoInfo.thumbnail}
-                    alt="Thumbnail"
-                    className="w-64 rounded-xl"
-                  />
+                   <img src={proxiedUrl} alt="Media" />
                   <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition">
                     <FontAwesomeIcon
                       icon={faPlay}
