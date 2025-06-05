@@ -23,7 +23,7 @@ function Home() {
   const lastLoadedRef = useRef({});
   const [downloadId, setDownloadId] = useState(null);
   const [formatFilter, setFormatFilter] = useState("all"); // 1. Add format filter tabs state
-  const proxiedThumbnail = `https://your-backend-name.onrender.com/api/proxy?url=${encodeURIComponent(videoInfo.thumbnail)}`;
+  const proxiedThumbnail = `https://videold-backend.onrender.com/api/proxy?url=${encodeURIComponent(videoInfo.thumbnail)}`;
 
 
 
