@@ -4,8 +4,8 @@ import { io } from "socket.io-client";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faDownload, faPlay } from "@fortawesome/free-solid-svg-icons";
 import Howto from "../components/Howto";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+// Use deployed backend as default
+const API_URL = import.meta.env.VITE_API_URL || "https://videold-backend.onrender.com";
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_URL;
 
 function Home() {
