@@ -385,7 +385,9 @@ function Home() {
                   {video.thumbnail ? (
                     <div className="relative w-48 h-28 rounded-md overflow-hidden group">
                       <img
-                        src={video.thumbnail}
+                        src={`${API_URL}/api/proxy-thumbnail?url=${encodeURIComponent(
+                          video.thumbnail
+                        )}`}
                         alt={video.title}
                         className="w-48 h-28 object-cover"
                       />
@@ -665,7 +667,9 @@ function Home() {
               {videoInfo.thumbnail && (
                 <div className="relative w-64 rounded-xl shadow-md overflow-hidden group">
                   <img
-                    src={videoInfo.thumbnail}
+                    src={`${API_URL}/api/proxy-thumbnail?url=${encodeURIComponent(
+                      videoInfo.thumbnail
+                    )}`}
                     alt="Thumbnail"
                     className="w-64 rounded-xl"
                   />
