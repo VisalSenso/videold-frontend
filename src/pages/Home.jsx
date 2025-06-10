@@ -84,7 +84,16 @@ function Home() {
     return formats.filter((f) => f.ext && f.ext.toLowerCase() === formatFilter);
   };
 
-  // New: Direct download by opening a new tab with the download URL
+  // New: Direct download by triggering a hidden anchor (no new tab)
+  const triggerDirectDownload = (downloadUrl) => {
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.setAttribute("download", ""); // Let server set filename
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   const handleDirectDownload = () => {
     const fixedUrl = normalizeUrl(url);
     if (!fixedUrl || !selectedFormat) return;
@@ -92,7 +101,8 @@ function Home() {
       url: fixedUrl,
       quality: selectedFormat,
     });
-    window.open(`${API_URL}/api/downloads?${params.toString()}`, "_blank");
+    const downloadUrl = `${API_URL}/api/downloads?${params.toString()}`;
+    triggerDirectDownload(downloadUrl);
   };
 
   // For playlist: direct download for each video
@@ -101,7 +111,8 @@ function Home() {
       url: video.url,
       quality: selectedFormats[video.id] || video.formats?.[0]?.format_id,
     });
-    window.open(`${API_URL}/api/downloads?${params.toString()}`, "_blank");
+    const downloadUrl = `${API_URL}/api/downloads?${params.toString()}`;
+    triggerDirectDownload(downloadUrl);
   };
 
   return (
