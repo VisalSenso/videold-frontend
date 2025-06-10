@@ -509,7 +509,7 @@ function Home() {
                           const directUrl = `${API_URL}/api/direct-download?url=${encodeURIComponent(
                             normalizeUrl(url)
                           )}&quality=${encodeURIComponent(selectedFormat)}`;
-                          window.open(directUrl, "_blank");
+                          window.location.href = directUrl;
                         }}
                         className="mt-4 w-full bg-primary cursor-pointer text-text-btn py-3 rounded-lg font-semibold"
                       >
