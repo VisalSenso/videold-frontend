@@ -45,13 +45,14 @@ function Home() {
     setSelectedFormat(null);
     setSelectedFormats({});
     setSelectedVideos(new Set());
-    try {      const res = await fetch(`${API_URL}/api/downloads`, {
+    try {
+      const res = await fetch(`${API_URL}/api/downloads`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: fixedUrl }),
       });
       const data = await res.json();
-      console.log('Fetched video info:', data);
+      console.log("Fetched video info:", data);
       if (data.isPlaylist) {
         setIsPlaylist(true);
         setVideoInfo({
@@ -84,7 +85,16 @@ function Home() {
     return formats.filter((f) => f.ext && f.ext.toLowerCase() === formatFilter);
   };
 
-  // New: Direct download by opening in a new tab (browser download bar appears immediately)
+  // Direct download using a hidden anchor (download bar, no new tab)
+  const triggerDirectDownload = (downloadUrl) => {
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.setAttribute("download", ""); // Let server set filename
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   const handleDirectDownload = () => {
     const fixedUrl = normalizeUrl(url);
     if (!fixedUrl || !selectedFormat) return;
@@ -93,7 +103,7 @@ function Home() {
       quality: selectedFormat,
     });
     const downloadUrl = `${API_URL}/api/downloads?${params.toString()}`;
-    window.open(downloadUrl, '_blank');
+    triggerDirectDownload(downloadUrl);
   };
 
   // For playlist: direct download for each video
@@ -103,7 +113,7 @@ function Home() {
       quality: selectedFormats[video.id] || video.formats?.[0]?.format_id,
     });
     const downloadUrl = `${API_URL}/api/downloads?${params.toString()}`;
-    window.open(downloadUrl, '_blank');
+    triggerDirectDownload(downloadUrl);
   };
 
   return (
