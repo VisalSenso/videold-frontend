@@ -38,6 +38,10 @@ function Home() {
       }
     });
 
+    socketRef.current.on("progress", ({ percent }) => {
+      setDownloadProgress(percent);
+    });
+
     return () => {
       socketRef.current.disconnect();
     };
@@ -496,24 +500,149 @@ function Home() {
                         ))}
                       </select>
                     )}
+
                     {/* Buttons */}
                     <div className="flex gap-2">
                       <button
-                        onClick={() => {
-                          if (!url || !selectedFormat) {
-                            alert("Please fetch a video and select a format.");
+                        onClick={async () => {
+                          const formatId =
+                            selectedFormats[video.id] ||
+                            video.formats?.[0]?.format_id;
+
+                          if (!formatId) {
+                            alert("Please select a format first.");
                             return;
                           }
-                          // Direct download: instant browser redirect
-                          const directUrl = `${API_URL}/api/direct-download?url=${encodeURIComponent(
-                            normalizeUrl(url)
-                          )}&quality=${encodeURIComponent(selectedFormat)}`;
-                          window.location.href = directUrl;
+
+                          // Set initial download state
+                          setDownloadStatus((prev) => ({
+                            ...prev,
+                            [video.id]: {
+                              ...prev[video.id],
+                              progress: 0,
+                              isDownloading: true,
+                            },
+                          }));
+
+                          lastLoadedRef.current[video.id] = 0;
+                          lastProgressUpdateRef.current[video.id] = Date.now();
+
+                          try {
+                            const res = await axios.post(
+                              "http://localhost:3000/api/downloads",
+                              { url: video.url, quality: formatId },
+                              {
+                                responseType: "blob",
+                                onDownloadProgress: (progressEvent) => {
+                                  const total =
+                                    progressEvent.total ?? progressEvent.loaded;
+                                  const loaded = progressEvent.loaded;
+                                  const percent = (loaded / total) * 100;
+
+                                  const now = Date.now();
+                                  const elapsed =
+                                    (now -
+                                      (lastProgressUpdateRef.current[
+                                        video.id
+                                      ] || now)) /
+                                    1000;
+
+                                  const deltaLoaded =
+                                    loaded -
+                                    (lastLoadedRef.current[video.id] || 0);
+
+                                  const speedBytesPerSec =
+                                    deltaLoaded / (elapsed || 1);
+                                  const estimatedTimeSec = speedBytesPerSec
+                                    ? (total - loaded) / speedBytesPerSec
+                                    : 0;
+
+                                  setDownloadStatus((prev) => ({
+                                    ...prev,
+                                    [video.id]: {
+                                      progress: percent,
+                                      isDownloading: true,
+                                    },
+                                  }));
+
+                                  lastLoadedRef.current[video.id] = loaded;
+                                  lastProgressUpdateRef.current[video.id] = now;
+                                },
+                              }
+                            );
+
+                            const blobUrl = window.URL.createObjectURL(
+                              new Blob([res.data])
+                            );
+                            const link = document.createElement("a");
+                            link.href = blobUrl;
+                            link.setAttribute("download", `${video.title}.mp4`);
+                            document.body.appendChild(link);
+                            link.click();
+                            link.remove();
+                            window.URL.revokeObjectURL(blobUrl);
+                          } catch (err) {
+                            console.error(err);
+                            alert("Failed to download video.");
+                          }
+
+                          // Mark download as complete
+                          setDownloadStatus((prev) => ({
+                            ...prev,
+                            [video.id]: {
+                              ...prev[video.id],
+                              isDownloading: false,
+                              progress: 100,
+                            },
+                          }));
                         }}
-                        className="mt-4 w-full bg-primary cursor-pointer text-text-btn py-3 rounded-lg font-semibold"
+                        className="bg-primary cursor-pointer text-text-btn px-4 py-2 rounded-md flex items-center gap-2 shadow hover:bg-blue-700 focus:ring-2 focus:ring-blue-400 transition"
                       >
-                        ⬇️ Download
+                        <FontAwesomeIcon
+                          icon={faDownload}
+                          className="w-5 h-5"
+                        />
+                        Download
                       </button>
+
+                      {downloadStatus[video.id] && (
+                        <div className="w-full space-y-2 mt-4">
+                          <div className="relative w-full h-5 bg-gray-200 rounded-full overflow-hidden shadow-md">
+                            <div
+                              className={`absolute left-0 top-0 h-full transition-all duration-300 ease-out animate-gradient-x`}
+                              style={{
+                                width: `${
+                                  downloadStatus[video.id].progress || 0
+                                }%`,
+                                background:
+                                  "linear-gradient(90deg, #3b82f6 0%, #60a5fa 50%, #2563eb 100%)",
+                                borderRadius: "9999px",
+                              }}
+                            >
+                              {/* Animated dot at the end */}
+                              <div
+                                className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-blue-400 rounded-full shadow-lg animate-bounce"
+                                style={{
+                                  display:
+                                    (downloadStatus[video.id].progress || 0) > 2
+                                      ? "block"
+                                      : "none",
+                                  boxShadow: "0 0 8px 2px #60a5fa55",
+                                }}
+                              ></div>
+                            </div>
+                            {/* Overlayed percentage */}
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="font-bold text-blue-900 text-sm drop-shadow-sm">
+                                {(
+                                  downloadStatus[video.id].progress || 0
+                                ).toFixed(0)}
+                                %
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </li>
@@ -531,6 +660,50 @@ function Home() {
               <FontAwesomeIcon icon={faDownload} className="w-5 h-5" />
               Download Selected Videos as ZIP
             </button>
+            {isDownloading && (
+              <div className="space-y-2 mt-4">
+                <div className="w-full flex flex-col items-center">
+                  <span className="mb-1 text-xs font-semibold text-primary tracking-wide uppercase">
+                    Download Progress
+                  </span>
+                  <div className="relative w-full h-6 bg-gray-200 rounded-full overflow-hidden shadow-md border border-gray-300">
+                    <div
+                      className="absolute left-0 top-0 h-full transition-all duration-300 ease-out animate-gradient-x"
+                      style={{
+                        width: `${downloadProgress.toFixed(0)}%`,
+                        background:
+                          "repeating-linear-gradient(90deg, #3b82f6 0%, #60a5fa 40%, #2563eb 100%)",
+                        borderRadius: "9999px",
+                        minWidth:
+                          downloadProgress > 0 && downloadProgress < 8
+                            ? "2.5rem"
+                            : undefined,
+                        boxShadow:
+                          downloadProgress > 0
+                            ? "0 0 12px 2px #60a5fa55"
+                            : undefined,
+                        opacity: downloadProgress > 0 ? 1 : 0.5,
+                      }}
+                    >
+                      {/* Animated dot at the end */}
+                      <div
+                        className="absolute right-0 top-1/2 -translate-y-1/2 w-5 h-5 bg-white border-2 border-blue-400 rounded-full shadow-lg animate-bounce"
+                        style={{
+                          display: downloadProgress > 2 ? "block" : "none",
+                          boxShadow: "0 0 12px 2px #60a5fa55",
+                        }}
+                      ></div>
+                    </div>
+                    {/* Overlayed percentage */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="font-extrabold text-blue-900 text-base drop-shadow-sm tracking-wider">
+                        {downloadProgress.toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -581,6 +754,7 @@ function Home() {
                     ))}
                   </div>
                 )}
+
                 {isFacebookUrl(url) ? (
                   <div className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color bg-gray-100 text-center font-semibold">
                     Best available video+audio (auto-selected for compatibility)
@@ -603,25 +777,56 @@ function Home() {
                     ))}
                   </select>
                 )}
-                {/* Direct download button: SaveFrom style */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      if (!url || !selectedFormat) {
-                        alert("Please fetch a video and select a format.");
-                        return;
-                      }
-                      // Direct download: instant browser redirect
-                      const directUrl = `${API_URL}/api/direct-download?url=${encodeURIComponent(
-                        normalizeUrl(url)
-                      )}&quality=${encodeURIComponent(selectedFormat)}`;
-                      window.location.href = directUrl;
-                    }}
-                    className="mt-4 w-full bg-primary cursor-pointer text-text-btn py-3 rounded-lg font-semibold"
-                  >
-                    ⬇️ Download
-                  </button>
-                </div>
+                <button
+                  onClick={handleDownload}
+                  className="mt-4 w-full bg-primary cursor-pointer text-text-btn py-3 rounded-lg font-semibold"
+                >
+                  ⬇️ Download
+                </button>
+                {isDownloading && (
+                  <div className="space-y-2 mt-4">
+                    <div className="w-full flex flex-col items-center">
+                      <span className="mb-1 text-xs font-semibold text-primary tracking-wide uppercase">
+                        Download Progress
+                      </span>
+                      <div className="relative w-full h-6 bg-gray-200 rounded-full overflow-hidden shadow-md border border-gray-300">
+                        <div
+                          className="absolute left-0 top-0 h-full transition-all duration-300 ease-out animate-gradient-x"
+                          style={{
+                            width: `${downloadProgress}%`,
+                            background:
+                              "repeating-linear-gradient(90deg, #3b82f6 0%, #60a5fa 40%, #2563eb 100%)",
+                            borderRadius: "9999px",
+                            minWidth:
+                              downloadProgress > 0 && downloadProgress < 8
+                                ? "2.5rem"
+                                : undefined,
+                            boxShadow:
+                              downloadProgress > 0
+                                ? "0 0 12px 2px #60a5fa55"
+                                : undefined,
+                            opacity: downloadProgress > 0 ? 1 : 0.5,
+                          }}
+                        >
+                          {/* Animated dot at the end */}
+                          <div
+                            className="absolute right-0 top-1/2 -translate-y-1/2 w-5 h-5 bg-white border-2 border-blue-400 rounded-full shadow-lg animate-bounce"
+                            style={{
+                              display: downloadProgress > 2 ? "block" : "none",
+                              boxShadow: "0 0 12px 2px #60a5fa55",
+                            }}
+                          ></div>
+                        </div>
+                        {/* Overlayed percentage */}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="font-extrabold text-blue-900 text-base drop-shadow-sm tracking-wider">
+                            {downloadProgress.toFixed(0)}%
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
