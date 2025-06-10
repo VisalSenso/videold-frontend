@@ -505,104 +505,46 @@ function Home() {
                     <div className="flex gap-2">
                       <button
                         onClick={async () => {
-                          const formatId =
-                            selectedFormats[video.id] ||
-                            video.formats?.[0]?.format_id;
-
-                          if (!formatId) {
-                            alert("Please select a format first.");
+                          if (!url || !selectedFormat) {
+                            alert("Please fetch a video and select a format.");
                             return;
                           }
-
-                          // Set initial download state
-                          setDownloadStatus((prev) => ({
-                            ...prev,
-                            [video.id]: {
-                              ...prev[video.id],
-                              progress: 0,
-                              isDownloading: true,
-                            },
-                          }));
-
-                          lastLoadedRef.current[video.id] = 0;
-                          lastProgressUpdateRef.current[video.id] = Date.now();
-
+                          // Build direct download URL
+                          const directUrl = `${API_URL}/api/direct-download?url=${encodeURIComponent(
+                            normalizeUrl(url)
+                          )}&quality=${encodeURIComponent(selectedFormat)}`;
+                          // Try to fetch HEAD to check for error (optional, for user-friendly error)
                           try {
-                            const res = await axios.post(
-                              "http://localhost:3000/api/downloads",
-                              { url: video.url, quality: formatId },
-                              {
-                                responseType: "blob",
-                                onDownloadProgress: (progressEvent) => {
-                                  const total =
-                                    progressEvent.total ?? progressEvent.loaded;
-                                  const loaded = progressEvent.loaded;
-                                  const percent = (loaded / total) * 100;
-
-                                  const now = Date.now();
-                                  const elapsed =
-                                    (now -
-                                      (lastProgressUpdateRef.current[
-                                        video.id
-                                      ] || now)) /
-                                    1000;
-
-                                  const deltaLoaded =
-                                    loaded -
-                                    (lastLoadedRef.current[video.id] || 0);
-
-                                  const speedBytesPerSec =
-                                    deltaLoaded / (elapsed || 1);
-                                  const estimatedTimeSec = speedBytesPerSec
-                                    ? (total - loaded) / speedBytesPerSec
-                                    : 0;
-
-                                  setDownloadStatus((prev) => ({
-                                    ...prev,
-                                    [video.id]: {
-                                      progress: percent,
-                                      isDownloading: true,
-                                    },
-                                  }));
-
-                                  lastLoadedRef.current[video.id] = loaded;
-                                  lastProgressUpdateRef.current[video.id] = now;
-                                },
+                            const headRes = await fetch(directUrl, {
+                              method: "HEAD",
+                            });
+                            const contentType =
+                              headRes.headers.get("content-type") || "";
+                            if (
+                              contentType.includes("application/json") ||
+                              contentType.includes("text/plain")
+                            ) {
+                              // Try to fetch error message
+                              const errRes = await fetch(directUrl);
+                              if (contentType.includes("application/json")) {
+                                const json = await errRes.json();
+                                alert(json.error || "Download failed");
+                              } else {
+                                const text = await errRes.text();
+                                alert(text || "Download failed");
                               }
-                            );
-
-                            const blobUrl = window.URL.createObjectURL(
-                              new Blob([res.data])
-                            );
-                            const link = document.createElement("a");
-                            link.href = blobUrl;
-                            link.setAttribute("download", `${video.title}.mp4`);
-                            document.body.appendChild(link);
-                            link.click();
-                            link.remove();
-                            window.URL.revokeObjectURL(blobUrl);
-                          } catch (err) {
-                            console.error(err);
-                            alert("Failed to download video.");
+                              return;
+                            }
+                          } catch (e) {
+                            alert("Failed to start download.");
+                            return;
                           }
-
-                          // Mark download as complete
-                          setDownloadStatus((prev) => ({
-                            ...prev,
-                            [video.id]: {
-                              ...prev[video.id],
-                              isDownloading: false,
-                              progress: 100,
-                            },
-                          }));
+                          // Open direct download in new tab (browser-native)
+                          window.open(directUrl, "_blank");
                         }}
-                        className="bg-primary cursor-pointer text-text-btn px-4 py-2 rounded-md flex items-center gap-2 shadow hover:bg-blue-700 focus:ring-2 focus:ring-blue-400 transition"
+                        className="mt-4 w-full bg-primary cursor-pointer text-text-btn py-3 rounded-lg font-semibold"
                       >
-                        <FontAwesomeIcon
-                          icon={faDownload}
-                          className="w-5 h-5"
-                        />
-                        Download
+                        ⬇️ Download
                       </button>
 
                       {downloadStatus[video.id] && (
