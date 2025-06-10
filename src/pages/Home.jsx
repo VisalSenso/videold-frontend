@@ -45,13 +45,13 @@ function Home() {
     setSelectedFormat(null);
     setSelectedFormats({});
     setSelectedVideos(new Set());
-    try {
-      const res = await fetch(`${API_URL}/api/downloads`, {
+    try {      const res = await fetch(`${API_URL}/api/downloads`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: fixedUrl }),
       });
       const data = await res.json();
+      console.log('Fetched video info:', data);
       if (data.isPlaylist) {
         setIsPlaylist(true);
         setVideoInfo({
@@ -256,13 +256,28 @@ function Home() {
                     ) : (
                       <select
                         className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color focus:ring-2 focus:ring-primary focus:border-primary transition"
-                        value={selectedFormats[video.id] || video.formats?.[0]?.format_id}
-                        onChange={(e) => setSelectedFormats((prev) => ({ ...prev, [video.id]: e.target.value }))}
+                        value={
+                          selectedFormats[video.id] ||
+                          video.formats?.[0]?.format_id
+                        }
+                        onChange={(e) =>
+                          setSelectedFormats((prev) => ({
+                            ...prev,
+                            [video.id]: e.target.value,
+                          }))
+                        }
                         disabled={isFacebookUrl(url)}
                       >
                         {filterFormats(video.formats)?.map((format) => (
-                          <option key={format.format_id} value={format.format_id}>
-                            {format.format_note || "Unknown"} • {format.ext} • {format.filesize ? (format.filesize / (1024 * 1024)).toFixed(1) + " MB" : "N/A"}
+                          <option
+                            key={format.format_id}
+                            value={format.format_id}
+                          >
+                            {format.format_note || "Unknown"} • {format.ext} •{" "}
+                            {format.filesize
+                              ? (format.filesize / (1024 * 1024)).toFixed(1) +
+                                " MB"
+                              : "N/A"}
                           </option>
                         ))}
                       </select>
