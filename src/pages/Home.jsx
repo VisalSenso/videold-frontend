@@ -38,10 +38,6 @@ function Home() {
       }
     });
 
-    socketRef.current.on("progress", ({ percent }) => {
-      setDownloadProgress(percent);
-    });
-
     return () => {
       socketRef.current.disconnect();
     };
@@ -504,7 +500,7 @@ function Home() {
                     {/* Buttons */}
                     <div className="flex gap-2">
                       <button
-                        onClick={async () => {
+                        onClick={() => {
                           if (!url || !selectedFormat) {
                             alert("Please fetch a video and select a format.");
                             return;
@@ -513,78 +509,12 @@ function Home() {
                           const directUrl = `${API_URL}/api/direct-download?url=${encodeURIComponent(
                             normalizeUrl(url)
                           )}&quality=${encodeURIComponent(selectedFormat)}`;
-                          // Try to fetch HEAD to check for error (optional, for user-friendly error)
-                          try {
-                            const headRes = await fetch(directUrl, {
-                              method: "HEAD",
-                            });
-                            const contentType =
-                              headRes.headers.get("content-type") || "";
-                            if (
-                              contentType.includes("application/json") ||
-                              contentType.includes("text/plain")
-                            ) {
-                              // Try to fetch error message
-                              const errRes = await fetch(directUrl);
-                              if (contentType.includes("application/json")) {
-                                const json = await errRes.json();
-                                alert(json.error || "Download failed");
-                              } else {
-                                const text = await errRes.text();
-                                alert(text || "Download failed");
-                              }
-                              return;
-                            }
-                          } catch (e) {
-                            alert("Failed to start download.");
-                            return;
-                          }
-                          // Open direct download in new tab (browser-native)
                           window.open(directUrl, "_blank");
                         }}
                         className="mt-4 w-full bg-primary cursor-pointer text-text-btn py-3 rounded-lg font-semibold"
                       >
                         ⬇️ Download
                       </button>
-
-                      {downloadStatus[video.id] && (
-                        <div className="w-full space-y-2 mt-4">
-                          <div className="relative w-full h-5 bg-gray-200 rounded-full overflow-hidden shadow-md">
-                            <div
-                              className={`absolute left-0 top-0 h-full transition-all duration-300 ease-out animate-gradient-x`}
-                              style={{
-                                width: `${
-                                  downloadStatus[video.id].progress || 0
-                                }%`,
-                                background:
-                                  "linear-gradient(90deg, #3b82f6 0%, #60a5fa 50%, #2563eb 100%)",
-                                borderRadius: "9999px",
-                              }}
-                            >
-                              {/* Animated dot at the end */}
-                              <div
-                                className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-blue-400 rounded-full shadow-lg animate-bounce"
-                                style={{
-                                  display:
-                                    (downloadStatus[video.id].progress || 0) > 2
-                                      ? "block"
-                                      : "none",
-                                  boxShadow: "0 0 8px 2px #60a5fa55",
-                                }}
-                              ></div>
-                            </div>
-                            {/* Overlayed percentage */}
-                            <div className="absolute inset-0 flex items-center justify-center">
-                              <span className="font-bold text-blue-900 text-sm drop-shadow-sm">
-                                {(
-                                  downloadStatus[video.id].progress || 0
-                                ).toFixed(0)}
-                                %
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   </div>
                 </li>
@@ -602,50 +532,6 @@ function Home() {
               <FontAwesomeIcon icon={faDownload} className="w-5 h-5" />
               Download Selected Videos as ZIP
             </button>
-            {isDownloading && (
-              <div className="space-y-2 mt-4">
-                <div className="w-full flex flex-col items-center">
-                  <span className="mb-1 text-xs font-semibold text-primary tracking-wide uppercase">
-                    Download Progress
-                  </span>
-                  <div className="relative w-full h-6 bg-gray-200 rounded-full overflow-hidden shadow-md border border-gray-300">
-                    <div
-                      className="absolute left-0 top-0 h-full transition-all duration-300 ease-out animate-gradient-x"
-                      style={{
-                        width: `${downloadProgress.toFixed(0)}%`,
-                        background:
-                          "repeating-linear-gradient(90deg, #3b82f6 0%, #60a5fa 40%, #2563eb 100%)",
-                        borderRadius: "9999px",
-                        minWidth:
-                          downloadProgress > 0 && downloadProgress < 8
-                            ? "2.5rem"
-                            : undefined,
-                        boxShadow:
-                          downloadProgress > 0
-                            ? "0 0 12px 2px #60a5fa55"
-                            : undefined,
-                        opacity: downloadProgress > 0 ? 1 : 0.5,
-                      }}
-                    >
-                      {/* Animated dot at the end */}
-                      <div
-                        className="absolute right-0 top-1/2 -translate-y-1/2 w-5 h-5 bg-white border-2 border-blue-400 rounded-full shadow-lg animate-bounce"
-                        style={{
-                          display: downloadProgress > 2 ? "block" : "none",
-                          boxShadow: "0 0 12px 2px #60a5fa55",
-                        }}
-                      ></div>
-                    </div>
-                    {/* Overlayed percentage */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="font-extrabold text-blue-900 text-base drop-shadow-sm tracking-wider">
-                        {downloadProgress.toFixed(0)}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -725,50 +611,6 @@ function Home() {
                 >
                   ⬇️ Download
                 </button>
-                {isDownloading && (
-                  <div className="space-y-2 mt-4">
-                    <div className="w-full flex flex-col items-center">
-                      <span className="mb-1 text-xs font-semibold text-primary tracking-wide uppercase">
-                        Download Progress
-                      </span>
-                      <div className="relative w-full h-6 bg-gray-200 rounded-full overflow-hidden shadow-md border border-gray-300">
-                        <div
-                          className="absolute left-0 top-0 h-full transition-all duration-300 ease-out animate-gradient-x"
-                          style={{
-                            width: `${downloadProgress}%`,
-                            background:
-                              "repeating-linear-gradient(90deg, #3b82f6 0%, #60a5fa 40%, #2563eb 100%)",
-                            borderRadius: "9999px",
-                            minWidth:
-                              downloadProgress > 0 && downloadProgress < 8
-                                ? "2.5rem"
-                                : undefined,
-                            boxShadow:
-                              downloadProgress > 0
-                                ? "0 0 12px 2px #60a5fa55"
-                                : undefined,
-                            opacity: downloadProgress > 0 ? 1 : 0.5,
-                          }}
-                        >
-                          {/* Animated dot at the end */}
-                          <div
-                            className="absolute right-0 top-1/2 -translate-y-1/2 w-5 h-5 bg-white border-2 border-blue-400 rounded-full shadow-lg animate-bounce"
-                            style={{
-                              display: downloadProgress > 2 ? "block" : "none",
-                              boxShadow: "0 0 12px 2px #60a5fa55",
-                            }}
-                          ></div>
-                        </div>
-                        {/* Overlayed percentage */}
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <span className="font-extrabold text-blue-900 text-base drop-shadow-sm tracking-wider">
-                            {downloadProgress.toFixed(0)}%
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </div>
