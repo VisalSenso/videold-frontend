@@ -5,7 +5,8 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faDownload, faPlay } from "@fortawesome/free-solid-svg-icons";
 import Howto from "../components/Howto";
 // Use deployed backend as default
-const API_URL = import.meta.env.VITE_API_URL || "https://videold-backend.onrender.com";
+const API_URL =
+  import.meta.env.VITE_API_URL || "https://videold-backend.onrender.com";
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_URL;
 
 function Home() {
@@ -46,8 +47,24 @@ function Home() {
     };
   }, [downloadId]); // Will re-run whenever downloadId changes
 
+  // Helper: ensure URL has protocol
+  function normalizeUrl(inputUrl) {
+    if (!inputUrl) return "";
+    let url = inputUrl.trim();
+    // Fix missing 'h' in https
+    if (url.startsWith("ttps://")) url = "h" + url;
+    if (url.startsWith("tps://")) url = "ht" + url;
+    if (url.startsWith("ps://")) url = "htt" + url;
+    // Add protocol if missing
+    if (!/^https?:\/\//i.test(url)) {
+      url = "https://" + url;
+    }
+    return url;
+  }
+
   const handleFetchInfo = async () => {
-    if (!url) return alert("Please enter a URL");
+    const fixedUrl = normalizeUrl(url);
+    if (!fixedUrl) return alert("Please enter a URL");
     setLoading(true);
     setVideoInfo(null);
     setIsPlaylist(false);
@@ -56,7 +73,9 @@ function Home() {
     setSelectedVideos(new Set());
 
     try {
-      const res = await axios.post(`${API_URL}/api/downloads`, { url });
+      const res = await axios.post(`${API_URL}/api/downloads`, {
+        url: fixedUrl,
+      });
 
       if (res.data.isPlaylist) {
         setIsPlaylist(true);
@@ -97,7 +116,8 @@ function Home() {
   const THROTTLE_INTERVAL = 500; // ms
 
   const handleDownload = async () => {
-    if (!url || !selectedFormat) {
+    const fixedUrl = normalizeUrl(url);
+    if (!fixedUrl || !selectedFormat) {
       alert("Please fetch a video and select a format.");
       return;
     }
@@ -108,7 +128,9 @@ function Home() {
     let socketProgressHandler;
     try {
       // Always get a fresh downloadId and filename
-      const initRes = await axios.post(`${API_URL}/api/init-download`, { url });
+      const initRes = await axios.post(`${API_URL}/api/init-download`, {
+        url: fixedUrl,
+      });
       const downloadIdToUse = initRes.data.downloadId;
       const filename = initRes.data.filename;
       // Join the socket room for this downloadId immediately
@@ -124,7 +146,7 @@ function Home() {
       const res = await axios.post(
         `${API_URL}/api/downloads`,
         {
-          url,
+          url: fixedUrl,
           quality:
             isFacebookUrl(url) &&
             !["m4a", "mp3"].includes((selectedFormatExt() || "").toLowerCase())
@@ -189,6 +211,7 @@ function Home() {
   };
 
   const handleMultiDownload = async () => {
+    const fixedUrl = normalizeUrl(url);
     if (selectedVideos.size === 0) {
       alert("Please select videos to download.");
       return;
@@ -217,13 +240,10 @@ function Home() {
     let filename = "videos";
     try {
       // 1. Get a downloadId for this multi-download
-      const initRes = await axios.post(
-        `${API_URL}/api/init-download`,
-        {
-          url: url, // pass the playlist url for context
-          isZip: true,
-        }
-      );
+      const initRes = await axios.post(`${API_URL}/api/init-download`, {
+        url: fixedUrl, // pass the playlist url for context
+        isZip: true,
+      });
       downloadIdToUse = initRes.data.downloadId;
       filename = initRes.data.filename || "videos";
       // 2. Join the socket room for this downloadId
