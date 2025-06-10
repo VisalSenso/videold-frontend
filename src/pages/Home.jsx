@@ -157,6 +157,32 @@ function Home() {
         { responseType: "blob" }
       );
 
+      // --- Handle backend error responses (e.g. TikTok returns .txt) ---
+      const contentType = res.headers["content-type"];
+      if (contentType && contentType.includes("application/json")) {
+        // Error response from backend
+        const reader = new FileReader();
+        reader.onload = function () {
+          try {
+            const json = JSON.parse(reader.result);
+            alert(json.error || "Download failed");
+          } catch {
+            alert("Download failed");
+          }
+        };
+        reader.readAsText(res.data);
+        return;
+      }
+      if (contentType && contentType.includes("text/plain")) {
+        // .txt file (error page)
+        const reader = new FileReader();
+        reader.onload = function () {
+          alert(reader.result || "Download failed");
+        };
+        reader.readAsText(res.data);
+        return;
+      }
+
       let contentDisposition = res.headers["content-disposition"];
       let ext = ".mp4";
       if (contentDisposition) {
