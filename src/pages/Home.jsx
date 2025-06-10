@@ -496,7 +496,6 @@ function Home() {
                         ))}
                       </select>
                     )}
-
                     {/* Buttons */}
                     <div className="flex gap-2">
                       <button
@@ -505,7 +504,7 @@ function Home() {
                             alert("Please fetch a video and select a format.");
                             return;
                           }
-                          // Build direct download URL
+                          // Direct download: instant browser redirect
                           const directUrl = `${API_URL}/api/direct-download?url=${encodeURIComponent(
                             normalizeUrl(url)
                           )}&quality=${encodeURIComponent(selectedFormat)}`;
@@ -582,7 +581,6 @@ function Home() {
                     ))}
                   </div>
                 )}
-
                 {isFacebookUrl(url) ? (
                   <div className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color bg-gray-100 text-center font-semibold">
                     Best available video+audio (auto-selected for compatibility)
@@ -605,12 +603,25 @@ function Home() {
                     ))}
                   </select>
                 )}
-                <button
-                  onClick={handleDownload}
-                  className="mt-4 w-full bg-primary cursor-pointer text-text-btn py-3 rounded-lg font-semibold"
-                >
-                  ⬇️ Download
-                </button>
+                {/* Direct download button: SaveFrom style */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      if (!url || !selectedFormat) {
+                        alert("Please fetch a video and select a format.");
+                        return;
+                      }
+                      // Direct download: instant browser redirect
+                      const directUrl = `${API_URL}/api/direct-download?url=${encodeURIComponent(
+                        normalizeUrl(url)
+                      )}&quality=${encodeURIComponent(selectedFormat)}`;
+                      window.location.href = directUrl;
+                    }}
+                    className="mt-4 w-full bg-primary cursor-pointer text-text-btn py-3 rounded-lg font-semibold"
+                  >
+                    ⬇️ Download
+                  </button>
+                </div>
               </div>
             </div>
           </div>
