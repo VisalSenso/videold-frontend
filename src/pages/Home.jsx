@@ -416,7 +416,6 @@ function Home() {
                             [video.id]: e.target.value,
                           }))
                         }
-                        disabled={isFacebookUrl(url)}
                       >
                         {filterFormats(video.formats)?.map((format) => (
                           <option
@@ -636,6 +635,17 @@ function Home() {
             Preparing ZIP archive. This may take a while for large playlists.
           </div>
         )}
+        {videoInfo && selectedFormat && (() => {
+  const fmt = videoInfo.formats.find(f => f.format_id === selectedFormat);
+  if (fmt && (fmt.acodec === "none" || fmt.vcodec === "none")) {
+    return (
+      <div className="text-yellow-500 text-xs mt-1">
+        Warning: This format may be video-only or audio-only. The backend will merge video and audio for compatibility.
+      </div>
+    );
+  }
+  return null;
+})()}
         <Howto />
       </div>
     </div>
