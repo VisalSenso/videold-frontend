@@ -16,7 +16,7 @@ function Home() {
   const [selectedFormats, setSelectedFormats] = useState({});
   const [selectedVideos, setSelectedVideos] = useState(new Set());
   const [formatFilter, setFormatFilter] = useState("all");
-  const [downloadingId, setDownloadingId] = useState(null); // Track which download is spinning
+  const [downloadingId, setDownloadingId] = useState(null);
 
   // Helper: ensure URL has protocol
   function normalizeUrl(inputUrl) {
@@ -131,22 +131,7 @@ function Home() {
   return (
     <div className="min-h-screen bg-[#ffffff] text-text-color p-6 flex items-center justify-center">
       <div className="w-full max-w-3xl  p-8 space-y-6">
-        {/* Spinner overlay */}
-        {downloadingId && (
-          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 flex flex-col items-center gap-3 shadow-lg">
-              <FontAwesomeIcon
-                icon={faSpinner}
-                spin
-                size="2x"
-                className="text-primary"
-              />
-              <span className="text-lg font-semibold text-primary">
-                Preparing download...
-              </span>
-            </div>
-          </div>
-        )}
+      
         {/* Google AdSense ad unit */}
         <div className="flex justify-center my-4">
           <ins
