@@ -100,9 +100,10 @@ function Home() {
       url: fixedUrl,
       quality: selectedFormat,
     });
-    const downloadUrl = `${API_URL}/api/downloads?${params.toString()}`;
+    const downloadUrl = `${API_URL}/api/download?${params.toString()}`;
     triggerDirectDownload(downloadUrl);
-    setTimeout(() => setDownloadingId(null), 2000);
+    // Show spinner/message for up to 10 seconds
+    setTimeout(() => setDownloadingId(null), 10000);
   };
 
   const handleDirectDownloadPlaylist = (video) => {
@@ -111,9 +112,9 @@ function Home() {
       url: video.url,
       quality: selectedFormats[video.id] || video.formats?.[0]?.format_id,
     });
-    const downloadUrl = `${API_URL}/api/downloads?${params.toString()}`;
+    const downloadUrl = `${API_URL}/api/download?${params.toString()}`;
     triggerDirectDownload(downloadUrl);
-    setTimeout(() => setDownloadingId(null), 2000);
+    setTimeout(() => setDownloadingId(null), 10000);
   };
 
   const toggleVideoSelection = (videoId) => {
