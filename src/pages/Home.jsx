@@ -1,15 +1,8 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import axios from "axios";
+import { io } from "socket.io-client";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faDownload,
-  faPlay,
-  faSpinner,
-} from "@fortawesome/free-solid-svg-icons";
-import Howto from "../components/Howto";
-// Use deployed backend as default
-const API_URL =
-  import.meta.env.VITE_API_URL || "https://videold-backend.onrender.com";
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || API_URL;
+import { faDownload, faPlay } from "@fortawesome/free-solid-svg-icons";
 
 function Home() {
   const [url, setUrl] = useState("");
@@ -17,200 +10,168 @@ function Home() {
   const [videoInfo, setVideoInfo] = useState(null);
   const [isPlaylist, setIsPlaylist] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState(null);
-  const [selectedFormats, setSelectedFormats] = useState({});
-  const [selectedVideos, setSelectedVideos] = useState(new Set());
-  const [formatFilter, setFormatFilter] = useState("all");
-  const [downloadingId, setDownloadingId] = useState(null);
-  const [downloadingZip, setDownloadingZip] = useState(false);
+  const [selectedFormats, setSelectedFormats] = useState({}); // For playlist videos
+  const [selectedVideos, setSelectedVideos] = useState(new Set()); // Track selected videos for batch download
+  const [downloadProgress, setDownloadProgress] = useState(0); // <== HERE
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState({});
+  const [downloadSpeed, setDownloadSpeed] = useState(0); // in MB/s
+  const [eta, setEta] = useState(0); // in seconds
+  const lastProgressUpdateRef = useRef({});
+  const lastLoadedRef = useRef({});
+  const [downloadId, setDownloadId] = useState(null);
+  const [formatFilter, setFormatFilter] = useState("all"); // 1. Add format filter tabs state
 
-  // Helper: ensure URL has protocol
-  function normalizeUrl(inputUrl) {
-    if (!inputUrl) return "";
-    let url = inputUrl.trim();
-    // Fix missing 'h' in https
-    if (url.startsWith("ttps://")) url = "h" + url;
-    if (url.startsWith("tps://")) url = "ht" + url;
-    if (url.startsWith("ps://")) url = "htt" + url;
-    // Add protocol if missing
-    if (!/^https?:\/\//i.test(url)) {
-      url = "https://" + url;
-    }
-    return url;
-  }
+  const socketRef = useRef();
+
+  useEffect(() => {
+    // Initialize socket only once
+    socketRef.current = io("http://localhost:4000");
+
+    // When connected, emit join with downloadId if available
+    socketRef.current.on("connect", () => {
+      if (downloadId) {
+        socketRef.current.emit("join", downloadId);
+      }
+    });
+
+    socketRef.current.on("progress", ({ percent, speed, eta, isZip }) => {
+      if (isZip) {
+        setDownloadProgress(percent);
+        setDownloadSpeed(speed || 0);
+        setEta(eta || 0);
+      } else {
+        setDownloadProgress(percent);
+        setDownloadSpeed(speed);
+        setEta(eta);
+      }
+    });
+
+    return () => {
+      socketRef.current.disconnect();
+    };
+  }, [downloadId]); // Will re-run whenever downloadId changes
 
   const handleFetchInfo = async () => {
-    const fixedUrl = normalizeUrl(url);
-    if (!fixedUrl) return;
+    if (!url) return alert("Please enter a URL");
     setLoading(true);
     setVideoInfo(null);
     setIsPlaylist(false);
     setSelectedFormat(null);
     setSelectedFormats({});
     setSelectedVideos(new Set());
+
     try {
-      const res = await fetch(`${API_URL}/api/info`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: fixedUrl }),
+      const res = await axios.post("http://localhost:4000/api/downloads", {
+        url,
       });
-      const data = await res.json();
-      console.log("Fetched video info:", data);
-      if (data.isPlaylist) {
+
+      if (res.data.isPlaylist) {
         setIsPlaylist(true);
         setVideoInfo({
-          title: data.playlistTitle,
-          videos: data.videos,
+          title: res.data.playlistTitle,
+          videos: res.data.videos || [],
         });
+
+        // 🟨 Add this log here to inspect playlist structure
+        console.log("Playlist videoInfo:", {
+          title: res.data.playlistTitle,
+          videos: res.data.videos || [],
+        });
+
+        // Initialize selected formats for each video to first available format
+        const initialFormats = {};
+        res.data.videos?.forEach((v) => {
+          if (v.formats?.length > 0)
+            initialFormats[v.id] = v.formats[0].format_id;
+        });
+        setSelectedFormats(initialFormats);
       } else {
-        setIsPlaylist(false);
-        setVideoInfo(data);
+        setVideoInfo(res.data);
+        // 🟨 Log for single video
+        console.log("Single videoInfo:", res.data);
+
+        if (res.data.formats?.length > 0) {
+          setSelectedFormat(res.data.formats[0].format_id);
+        }
       }
-    } catch (e) {
-      setVideoInfo(null);
+    } catch {
+      alert("Failed to fetch video or playlist info.");
     }
+
     setLoading(false);
   };
 
-  // Helper to get selected format extension
-  function selectedFormatExt() {
-    if (!videoInfo || !videoInfo.formats) return null;
-    const fmt = videoInfo.formats.find((f) => f.format_id === selectedFormat);
-    return fmt?.ext || null;
-  }
+  const THROTTLE_INTERVAL = 500; // ms
 
-  // Helper to check if a URL is a Facebook link
-  const isFacebookUrl = (url) => url && url.includes("facebook.com");
+  const handleDownload = async () => {
+    if (!url || !selectedFormat) {
+      alert("Please fetch a video and select a format.");
+      return;
+    }
 
-  // Helper: get progressive formats (audio+video)
-  function getProgressiveFormats(formats) {
-    return (
-      formats?.filter((f) => f.acodec !== "none" && f.vcodec !== "none") || []
-    );
-  }
+    setIsDownloading(true);
+    setDownloadProgress(0);
+    setDownloadSpeed(0);
+    setEta(0);
 
-  // Helper: filter formats, but prefer progressive for default
-  const filterFormats = (formats) => {
-    if (formatFilter === "all") return formats;
-    return formats.filter((f) => f.ext && f.ext.toLowerCase() === formatFilter);
-  };
-
-  // Direct download using a hidden anchor (download bar, no new tab)
-  const triggerDirectDownload = (downloadUrl) => {
-    const a = document.createElement("a");
-    a.href = downloadUrl;
-    a.setAttribute("download", ""); // Let server set filename
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  // Advanced download with fetch and stream
-  const advancedDownload = async (downloadUrl, filename, onProgress) => {
-    setDownloadingId("single");
     try {
-      const response = await fetch(downloadUrl);
-      if (!response.ok) throw new Error("Network response was not ok");
-
-      const contentLength = response.headers.get("content-length");
-      const total = contentLength ? parseInt(contentLength, 10) : null;
-      let loaded = 0;
-
-      const reader = response.body.getReader();
-      const chunks = [];
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        loaded += value.length;
-        if (onProgress && total) onProgress(loaded / total);
-      }
-      const blob = new Blob(chunks);
-      const url = window.URL.createObjectURL(blob);
-
-      // Trigger download
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename || "video.mp4";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (e) {
-      alert("Download failed.");
-    }
-    setDownloadingId(null);
-  };
-
-  const handleDirectDownload = async () => {
-    const fixedUrl = normalizeUrl(url);
-    if (!fixedUrl || !selectedFormat) return;
-    setDownloadingId("single");
-    const params = new URLSearchParams({
-      url: fixedUrl,
-      quality: selectedFormat,
-    });
-    const downloadUrl = `${API_URL}/api/download?${params.toString()}`;
-
-    // Get filename from videoInfo if available
-    let filename = "video.mp4";
-    if (videoInfo && videoInfo.title) {
-      filename = videoInfo.title.replace(/[\\/:*?"<>|]/g, "_") + ".mp4";
-    }
-
-    await advancedDownload(downloadUrl, filename);
-  };
-
-  const advancedDownloadPlaylist = async (video, onProgress) => {
-    setDownloadingId(video.id);
-    try {
-      const params = new URLSearchParams({
-        url: video.url,
-        quality: selectedFormats[video.id] || video.formats?.[0]?.format_id,
-      });
-      const downloadUrl = `${API_URL}/api/download?${params.toString()}`;
-
-      // Get filename from video title
-      let filename = "video.mp4";
-      if (video.title) {
-        filename = video.title.replace(/[\\/:*?"<>|]/g, "_") + ".mp4";
+      // Only fetch downloadId and filename if not already present
+      let downloadIdToUse = downloadId;
+      let filename = videoInfo?.title || "video";
+      if (!downloadId) {
+        const initRes = await axios.post(
+          "http://localhost:4000/api/init-download",
+          {
+            url,
+            quality: selectedFormat,
+          }
+        );
+        downloadIdToUse = initRes.data.downloadId;
+        filename = initRes.data.filename;
+        setDownloadId(downloadIdToUse);
+        // Join socket room
+        socketRef.current.emit("join", downloadIdToUse);
       }
 
-      const response = await fetch(downloadUrl);
-      if (!response.ok) throw new Error("Network response was not ok");
+      // Now trigger actual download (only once)
+      const res = await axios.post(
+        "http://localhost:4000/api/downloads",
+        { url, quality: selectedFormat, downloadId: downloadIdToUse },
+        { responseType: "blob" }
+      );
 
-      const contentLength = response.headers.get("content-length");
-      const total = contentLength ? parseInt(contentLength, 10) : null;
-      let loaded = 0;
-
-      const reader = response.body.getReader();
-      const chunks = [];
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        loaded += value.length;
-        if (onProgress && total) onProgress(loaded / total);
+      // Try to get extension from response headers
+      let contentDisposition = res.headers["content-disposition"];
+      let ext = ".mp4";
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?.*\.(\w+)"?/);
+        if (match && match[1]) {
+          ext = "." + match[1];
+        }
       }
-      const blob = new Blob(chunks);
-      const url = window.URL.createObjectURL(blob);
-
-      // Trigger download
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (e) {
-      alert("Download failed.");
+      const blob = new Blob([res.data]);
+      triggerDownload(blob, `${filename}${ext}`);
+    } catch (err) {
+      alert("Download failed");
+      console.error(err);
     }
-    setDownloadingId(null);
+
+    setIsDownloading(false);
+    setEta(0);
+    setDownloadSpeed(0);
+    setDownloadProgress(0);
   };
 
-  const handleDirectDownloadPlaylist = (video) => {
-    advancedDownloadPlaylist(video);
-  };
+  function triggerDownload(blob, filename) {
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
 
   const toggleVideoSelection = (videoId) => {
     setSelectedVideos((prev) => {
@@ -224,60 +185,93 @@ function Home() {
     });
   };
 
-  const handleDownloadAllAsZip = async () => {
-    if (!videoInfo?.videos?.length) return;
-    setDownloadingZip(true);
+  const handleMultiDownload = async () => {
+    if (selectedVideos.size === 0) {
+      alert("Please select videos to download.");
+      return;
+    }
 
-    // Only include selected videos, or all if none selected
-    const videosToDownload = Array.from(selectedVideos).length
-      ? videoInfo.videos.filter((v) => selectedVideos.has(v.id))
-      : videoInfo.videos;
+    const videosToDownload = Array.from(selectedVideos)
+      .map((videoId) => {
+        const video = videoInfo.videos.find((v) => v.id === videoId);
+        if (!video) return null;
+        const quality =
+          selectedFormats[videoId] || video.formats?.[0]?.format_id;
+        if (!quality) return null;
+        return { url: video.url, quality, title: video.title };
+      })
+      .filter(Boolean);
 
-    const payload = videosToDownload.map((video) => ({
-      url: video.url,
-      quality: selectedFormats[video.id] || video.formats?.[0]?.format_id,
-      title: video.title,
-    }));
+    if (videosToDownload.length === 0) {
+      alert("No valid videos to download.");
+      return;
+    }
+
+    setIsDownloading(true);
+    setDownloadProgress(0);
 
     try {
-      const response = await fetch(`${API_URL}/api/download-playlist`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ videos: payload }),
-      });
+      const res = await axios.post(
+        "http://localhost:4000/api/multi-downloads",
+        { videos: videosToDownload },
+        {
+          responseType: "blob",
+          onDownloadProgress: (progressEvent) => {
+            if (progressEvent.lengthComputable) {
+              const percent =
+                (progressEvent.loaded / progressEvent.total) * 100;
+              setDownloadProgress(percent);
 
-      if (!response.ok) throw new Error("Failed to download ZIP");
+              const now = Date.now();
+              const elapsed =
+                (now - (lastProgressUpdateRef.current.zip || now)) / 1000;
 
-      // Stream the zip file and trigger download
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = (videoInfo.title || "playlist") + ".zip";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (e) {
-      alert("Failed to download ZIP.");
+              const deltaLoaded =
+                progressEvent.loaded - (lastLoadedRef.current.zip || 0);
+
+              const speedBytesPerSec = deltaLoaded / (elapsed || 1);
+              const estimatedTimeSec = speedBytesPerSec
+                ? (progressEvent.total - progressEvent.loaded) /
+                  speedBytesPerSec
+                : 0;
+
+              setDownloadSpeed((speedBytesPerSec / 1024 / 1024).toFixed(2));
+              setEta(Math.ceil(estimatedTimeSec));
+
+              lastLoadedRef.current.zip = progressEvent.loaded;
+              lastProgressUpdateRef.current.zip = now;
+            }
+          },
+        }
+      );
+
+      const blobUrl = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.setAttribute("download", "videos.zip");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      alert("Failed to download selected videos as ZIP.");
+      console.error(err);
     }
-    setDownloadingZip(false);
+
+    setIsDownloading(false);
+  };
+
+  // Helper to check if a URL is a Facebook link
+  const isFacebookUrl = (url) => url && url.includes("facebook.com");
+
+  // 2. Helper to filter formats
+  const filterFormats = (formats) => {
+    if (formatFilter === "all") return formats;
+    return formats.filter((f) => f.ext && f.ext.toLowerCase() === formatFilter);
   };
 
   return (
     <div className="min-h-screen bg-[#ffffff] text-text-color p-6 flex items-center justify-center">
       <div className="w-full max-w-3xl  p-8 space-y-6">
-        {/* Google AdSense ad unit */}
-        <div className="flex justify-center my-4">
-          <ins
-            className="adsbygoogle"
-            style={{ display: "block", width: "100%", minHeight: 90 }}
-            data-ad-client="ca-pub-XXXXXXXXXXXXXXXX" // <-- Replace this
-            data-ad-slot="1234567890" // <-- Replace this
-            data-ad-format="auto"
-            data-full-width-responsive="true"
-          ></ins>
-        </div>
         <h1 className="text-3xl font-bold text-center text-text-color">
           Video <span className="text-primary ">Downloader</span>
         </h1>
@@ -298,7 +292,6 @@ function Home() {
           <button
             onClick={handleFetchInfo}
             className="bg-primary cursor-pointer text-[#ffffff] px-6 py-3 rounded-lg"
-            disabled={downloadingId === "single"}
           >
             {loading ? "Loading..." : "Fetch"}
           </button>
@@ -355,9 +348,7 @@ function Home() {
                   {video.thumbnail ? (
                     <div className="relative w-48 h-28 rounded-md overflow-hidden group">
                       <img
-                        src={`${API_URL}/api/proxy-thumbnail?url=${encodeURIComponent(
-                          video.thumbnail
-                        )}`}
+                        src={video.thumbnail}
                         alt={video.title}
                         className="w-48 h-28 object-cover"
                       />
@@ -398,26 +389,23 @@ function Home() {
                       </div>
                     )}
 
-                    {isFacebookUrl(url) ? (
-                      <div className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color bg-gray-100 text-center font-semibold">
-                        Best available video+audio (auto-selected for
-                        compatibility)
-                      </div>
-                    ) : (
-                      <select
-                        className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color focus:ring-2 focus:ring-primary focus:border-primary transition"
-                        value={
-                          selectedFormats[video.id] ||
-                          video.formats?.[0]?.format_id
-                        }
-                        onChange={(e) =>
-                          setSelectedFormats((prev) => ({
-                            ...prev,
-                            [video.id]: e.target.value,
-                          }))
-                        }
-                      >
-                        {filterFormats(video.formats)?.map((format) => (
+                    <select
+                      className="w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color focus:ring-2 focus:ring-primary focus:border-primary transition"
+                      value={selectedFormats[video.id] || ""}
+                      onChange={(e) =>
+                        setSelectedFormats((prev) => ({
+                          ...prev,
+                          [video.id]: e.target.value,
+                        }))
+                      }
+                      disabled={
+                        isFacebookUrl(video.url) ||
+                        !video.formats ||
+                        video.formats.length === 0
+                      }
+                    >
+                      {filterFormats(video.formats)?.length > 0 ? (
+                        filterFormats(video.formats).map((format) => (
                           <option
                             key={format.format_id}
                             value={format.format_id}
@@ -428,41 +416,221 @@ function Home() {
                                 " MB"
                               : "N/A"}
                           </option>
-                        ))}
-                      </select>
-                    )}
+                        ))
+                      ) : (
+                        <option>No formats available</option>
+                      )}
+                    </select>
 
                     {/* Buttons */}
                     <div className="flex gap-2">
                       <button
-                        onClick={() => handleDirectDownloadPlaylist(video)}
+                        onClick={async () => {
+                          const formatId =
+                            selectedFormats[video.id] ||
+                            video.formats?.[0]?.format_id;
+
+                          if (!formatId) {
+                            alert("Please select a format first.");
+                            return;
+                          }
+
+                          // Set initial download state
+                          setDownloadStatus((prev) => ({
+                            ...prev,
+                            [video.id]: {
+                              ...prev[video.id],
+                              progress: 0,
+                              speed: 0,
+                              eta: 0,
+                              isDownloading: true,
+                            },
+                          }));
+
+                          lastLoadedRef.current[video.id] = 0;
+                          lastProgressUpdateRef.current[video.id] = Date.now();
+
+                          try {
+                            const res = await axios.post(
+                              "http://localhost:4000/api/downloads",
+                              { url: video.url, quality: formatId },
+                              {
+                                responseType: "blob",
+                                onDownloadProgress: (progressEvent) => {
+                                  const total =
+                                    progressEvent.total ?? progressEvent.loaded;
+                                  const loaded = progressEvent.loaded;
+                                  const percent = (loaded / total) * 100;
+
+                                  const now = Date.now();
+                                  const elapsed =
+                                    (now -
+                                      (lastProgressUpdateRef.current[
+                                        video.id
+                                      ] || now)) /
+                                    1000;
+
+                                  const deltaLoaded =
+                                    loaded -
+                                    (lastLoadedRef.current[video.id] || 0);
+
+                                  const speedBytesPerSec =
+                                    deltaLoaded / (elapsed || 1);
+                                  const estimatedTimeSec = speedBytesPerSec
+                                    ? (total - loaded) / speedBytesPerSec
+                                    : 0;
+
+                                  setDownloadStatus((prev) => ({
+                                    ...prev,
+                                    [video.id]: {
+                                      progress: percent,
+                                      speed: (
+                                        speedBytesPerSec /
+                                        1024 /
+                                        1024
+                                      ).toFixed(2),
+                                      eta: Math.ceil(estimatedTimeSec),
+                                      isDownloading: true,
+                                    },
+                                  }));
+
+                                  lastLoadedRef.current[video.id] = loaded;
+                                  lastProgressUpdateRef.current[video.id] = now;
+                                },
+                              }
+                            );
+
+                            const blobUrl = window.URL.createObjectURL(
+                              new Blob([res.data])
+                            );
+                            const link = document.createElement("a");
+                            link.href = blobUrl;
+                            link.setAttribute("download", `${video.title}.mp4`);
+                            document.body.appendChild(link);
+                            link.click();
+                            link.remove();
+                            window.URL.revokeObjectURL(blobUrl);
+                          } catch (err) {
+                            console.error(err);
+                            alert("Failed to download video.");
+                          }
+
+                          // Mark download as complete
+                          setDownloadStatus((prev) => ({
+                            ...prev,
+                            [video.id]: {
+                              ...prev[video.id],
+                              isDownloading: false,
+                              progress: 100,
+                              speed: 0,
+                              eta: 0,
+                            },
+                          }));
+                        }}
                         className="bg-primary cursor-pointer text-text-btn px-4 py-2 rounded-md flex items-center gap-2 shadow hover:bg-blue-700 focus:ring-2 focus:ring-blue-400 transition"
-                        disabled={downloadingId === video.id}
                       >
-                        {downloadingId === video.id ? (
-                          <>
-                            <FontAwesomeIcon
-                              icon={faSpinner}
-                              spin
-                              className="w-5 h-5"
-                            />
-                            Preparing...
-                          </>
-                        ) : (
-                          <>
-                            <FontAwesomeIcon
-                              icon={faDownload}
-                              className="w-5 h-5"
-                            />
-                            Download
-                          </>
-                        )}
+                        <FontAwesomeIcon icon={faDownload} className="w-5 h-5" />
+                        Download
                       </button>
+
+                      {downloadStatus[video.id] && (
+                        <div className="w-full space-y-2 mt-4">
+                          <div className="relative w-full h-5 bg-gray-200 rounded-full overflow-hidden shadow-md">
+                            <div
+                              className={`absolute left-0 top-0 h-full transition-all duration-300 ease-out animate-gradient-x`}
+                              style={{
+                                width: `${
+                                  downloadStatus[video.id].progress || 0
+                                }%`,
+                                background:
+                                  "linear-gradient(90deg, #3b82f6 0%, #60a5fa 50%, #2563eb 100%)",
+                                borderRadius: "9999px",
+                              }}
+                            >
+                              {/* Animated dot at the end */}
+                              <div
+                                className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-blue-400 rounded-full shadow-lg animate-bounce"
+                                style={{
+                                  display:
+                                    (downloadStatus[video.id].progress || 0) > 2
+                                      ? "block"
+                                      : "none",
+                                  boxShadow: "0 0 8px 2px #60a5fa55",
+                                }}
+                              ></div>
+                            </div>
+                            {/* Overlayed percentage */}
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <span className="font-bold text-blue-900 text-sm drop-shadow-sm">
+                                {(
+                                  downloadStatus[video.id].progress || 0
+                                ).toFixed(0)}
+                                %
+                              </span>
+                            </div>
+                          </div>
+                          {(downloadStatus[video.id].speed ||
+                            downloadStatus[video.id].eta) && (
+                            <div className="text-xs text-gray-500 flex gap-4 justify-between px-1">
+                              <span>
+                                Speed: {downloadStatus[video.id].speed} MB/s
+                              </span>
+                              <span>ETA: {downloadStatus[video.id].eta}s</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </li>
               ))}
             </ul>
+            <button
+              disabled={selectedVideos.size === 0}
+              onClick={handleMultiDownload}
+              className={`mt-4 w-full py-3 rounded-lg font-semibold flex items-center justify-center gap-2 shadow ${
+                selectedVideos.size === 0
+                  ? "bg-[#eae9e9] cursor-not-allowed"
+                  : "bg-primary text-text-btn hover:bg-blue-700 focus:ring-2 focus:ring-blue-400 transition"
+              }`}
+            >
+              <FontAwesomeIcon icon={faDownload} className="w-5 h-5" />
+              Download Selected Videos as ZIP
+            </button>
+            {isDownloading && (
+              <div className="space-y-2 mt-4">
+                <div className="relative w-full h-5 bg-gray-200 rounded-full overflow-hidden shadow-md">
+                  <div
+                    className="absolute left-0 top-0 h-full transition-all duration-300 ease-out animate-gradient-x"
+                    style={{
+                      width: `${downloadProgress.toFixed(0)}%`,
+                      background:
+                        "linear-gradient(90deg, #3b82f6 0%, #60a5fa 50%, #2563eb 100%)",
+                      borderRadius: "9999px",
+                    }}
+                  >
+                    {/* Animated dot at the end */}
+                    <div
+                      className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-blue-400 rounded-full shadow-lg animate-bounce"
+                      style={{
+                        display: downloadProgress > 2 ? "block" : "none",
+                        boxShadow: "0 0 8px 2px #60a5fa55",
+                      }}
+                    ></div>
+                  </div>
+                  {/* Overlayed percentage */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="font-bold text-blue-900 text-sm drop-shadow-sm">
+                      {downloadProgress.toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+                <div className="flex justify-between text-sm text-gray-500 px-1">
+                  <span>Speed: {downloadSpeed} MB/s</span>
+                  <span>ETA: {eta}s</span>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -472,9 +640,7 @@ function Home() {
               {videoInfo.thumbnail && (
                 <div className="relative w-64 rounded-xl shadow-md overflow-hidden group">
                   <img
-                    src={`${API_URL}/api/proxy-thumbnail?url=${encodeURIComponent(
-                      videoInfo.thumbnail
-                    )}`}
+                    src={videoInfo.thumbnail}
                     alt="Thumbnail"
                     className="w-64 rounded-xl"
                   />
@@ -514,143 +680,66 @@ function Home() {
                   </div>
                 )}
 
-                {isFacebookUrl(url) ? (
-                  <div className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color bg-gray-100 text-center font-semibold">
-                    Best available video+audio (auto-selected for compatibility)
-                  </div>
-                ) : (
-                  <select
-                    className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color focus:ring-2 focus:ring-primary focus:border-primary transition"
-                    value={selectedFormat || ""}
-                    onChange={(e) => setSelectedFormat(e.target.value)}
-                    disabled={isFacebookUrl(url)}
-                  >
-                    {(() => {
-                      const allFormats = filterFormats(videoInfo.formats);
-                      const progressive = getProgressiveFormats(allFormats);
-                      const nonProgressive = allFormats.filter(
-                        (f) => !(f.acodec !== "none" && f.vcodec !== "none")
-                      );
-                      return (
-                        <>
-                          {progressive.length > 0 && (
-                            <optgroup label="Fastest (audio+video)">
-                              {progressive.map((format) => (
-                                <option
-                                  key={format.format_id}
-                                  value={format.format_id}
-                                >
-                                  {format.resolution ||
-                                    format.format_note ||
-                                    "Unknown"}{" "}
-                                  • {format.ext} •{" "}
-                                  {format.filesize
-                                    ? (format.filesize / (1024 * 1024)).toFixed(
-                                        1
-                                      ) + " MB"
-                                    : "N/A"}{" "}
-                                  🚀
-                                </option>
-                              ))}
-                            </optgroup>
-                          )}
-                          {nonProgressive.length > 0 && (
-                            <optgroup label="Other (may take longer)">
-                              {nonProgressive.map((format) => (
-                                <option
-                                  key={format.format_id}
-                                  value={format.format_id}
-                                >
-                                  {format.resolution ||
-                                    format.format_note ||
-                                    "Unknown"}{" "}
-                                  • {format.ext} •{" "}
-                                  {format.filesize
-                                    ? (format.filesize / (1024 * 1024)).toFixed(
-                                        1
-                                      ) + " MB"
-                                    : "N/A"}
-                                </option>
-                              ))}
-                            </optgroup>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </select>
-                )}
-                {/* Download button opens direct download in new tab */}
-                <button
-                  onClick={handleDirectDownload}
-                  className="mt-4 w-full bg-primary cursor-pointer text-text-btn py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
-                  disabled={downloadingId === "single"}
+                <select
+                  className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color focus:ring-2 focus:ring-primary focus:border-primary transition"
+                  value={selectedFormat || ""}
+                  onChange={(e) => setSelectedFormat(e.target.value)}
+                  disabled={isFacebookUrl(url)}
                 >
-                  {downloadingId === "single" ? (
-                    <>
-                      <FontAwesomeIcon
-                        icon={faSpinner}
-                        spin
-                        className="w-5 h-5"
-                      />
-                      Preparing...
-                    </>
-                  ) : (
-                    <>⬇️ Download</>
-                  )}
+                  {filterFormats(videoInfo.formats)?.map((format) => (
+                    <option key={format.format_id} value={format.format_id}>
+                      {format.resolution || format.format_note || "Unknown"} •{" "}
+                      {format.ext} •{" "}
+                      {format.filesize
+                        ? (format.filesize / (1024 * 1024)).toFixed(1) + " MB"
+                        : "N/A"}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleDownload}
+                  className="mt-4 w-full bg-primary cursor-pointer text-text-btn py-3 rounded-lg font-semibold"
+                >
+                  ⬇️ Download
                 </button>
-                {downloadingId === "single" && (
-                  <div className="text-xs text-gray-400 mt-2 text-center">
-                    Preparing your download. This may take a few seconds
-                    depending on the video site.
+                {isDownloading && (
+                  <div className="space-y-2 mt-4">
+                    <div className="relative w-full h-5 bg-gray-200 rounded-full overflow-hidden shadow-md">
+                      <div
+                        className="absolute left-0 top-0 h-full transition-all duration-300 ease-out animate-gradient-x"
+                        style={{
+                          width: `${downloadProgress}%`,
+                          background:
+                            "linear-gradient(90deg, #3b82f6 0%, #60a5fa 50%, #2563eb 100%)",
+                          borderRadius: "9999px",
+                        }}
+                      >
+                        {/* Animated dot at the end */}
+                        <div
+                          className="absolute right-0 top-1/2 -translate-y-1/2 w-4 h-4 bg-white border-2 border-blue-400 rounded-full shadow-lg animate-bounce"
+                          style={{
+                            display: downloadProgress > 2 ? "block" : "none",
+                            boxShadow: "0 0 8px 2px #60a5fa55",
+                          }}
+                        ></div>
+                      </div>
+                      {/* Overlayed percentage */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="font-bold text-blue-900 text-sm drop-shadow-sm">
+                          {downloadProgress.toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between text-sm text-gray-500 px-1">
+                      <span>Speed: {downloadSpeed} MB/s</span>
+                      <span>ETA: {eta}s</span>
+                    </div>
                   </div>
                 )}
               </div>
             </div>
           </div>
         )}
-        {isPlaylist && videoInfo?.videos?.length > 0 && (
-          <div className="flex justify-center mb-4">
-            <button
-              onClick={handleDownloadAllAsZip}
-              className="bg-primary text-white px-6 py-2 rounded-lg flex items-center gap-2"
-              disabled={downloadingZip}
-            >
-              {downloadingZip ? (
-                <>
-                  <FontAwesomeIcon icon={faSpinner} spin className="w-5 h-5" />
-                  Preparing ZIP...
-                </>
-              ) : (
-                <>
-                  <FontAwesomeIcon icon={faDownload} className="w-5 h-5" />
-                  Download All as ZIP
-                </>
-              )}
-            </button>
-          </div>
-        )}
-        {downloadingZip && (
-          <div className="text-xs text-gray-400 mt-2 text-center">
-            Preparing ZIP archive. This may take a while for large playlists.
-          </div>
-        )}
-        {videoInfo &&
-          selectedFormat &&
-          (() => {
-            const fmt = videoInfo.formats.find(
-              (f) => f.format_id === selectedFormat
-            );
-            if (fmt && (fmt.acodec === "none" || fmt.vcodec === "none")) {
-              return (
-                <div className="text-yellow-500 text-xs mt-1">
-                  Warning: This format may be video-only or audio-only. The
-                  backend will merge video and audio for compatibility.
-                </div>
-              );
-            }
-            return null;
-          })()}
-        <Howto />
       </div>
     </div>
   );
