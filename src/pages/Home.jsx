@@ -163,20 +163,23 @@ function Home() {
   const advancedDownloadPlaylist = async (video, onProgress) => {
     setDownloadingId(video.id);
     try {
-      const params = new URLSearchParams({
-        url: video.url,
-        quality: selectedFormats[video.id] || video.formats?.[0]?.format_id,
+      const response = await fetch(`${API_URL}/api/downloads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: video.url,
+          quality: selectedFormats[video.id] || video.formats?.[0]?.format_id,
+          downloadId: video.id,
+        }),
       });
-      const downloadUrl = `${API_URL}/api/download?${params.toString()}`;
+
+      if (!response.ok) throw new Error("Network response was not ok");
 
       // Get filename from video title
       let filename = "video.mp4";
       if (video.title) {
         filename = video.title.replace(/[\\/:*?"<>|]/g, "_") + ".mp4";
       }
-
-      const response = await fetch(downloadUrl);
-      if (!response.ok) throw new Error("Network response was not ok");
 
       const contentLength = response.headers.get("content-length");
       const total = contentLength ? parseInt(contentLength, 10) : null;
