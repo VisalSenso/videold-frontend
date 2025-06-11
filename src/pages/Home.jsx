@@ -525,7 +525,6 @@ function Home() {
                     onChange={(e) => setSelectedFormat(e.target.value)}
                     disabled={isFacebookUrl(url)}
                   >
-                    {/* Prefer progressive formats at the top */}
                     {(() => {
                       const allFormats = filterFormats(videoInfo.formats);
                       const progressive = getProgressiveFormats(allFormats);
