@@ -102,8 +102,8 @@ function Home() {
     });
     const downloadUrl = `${API_URL}/api/download?${params.toString()}`;
     triggerDirectDownload(downloadUrl);
-    // Show spinner/message for up to 10 seconds
-    setTimeout(() => setDownloadingId(null), 10000);
+    // Show spinner/message for 3 seconds (matches backend delay)
+    setTimeout(() => setDownloadingId(null), 3000);
   };
 
   const handleDirectDownloadPlaylist = (video) => {
@@ -114,7 +114,7 @@ function Home() {
     });
     const downloadUrl = `${API_URL}/api/download?${params.toString()}`;
     triggerDirectDownload(downloadUrl);
-    setTimeout(() => setDownloadingId(null), 10000);
+    setTimeout(() => setDownloadingId(null), 3000);
   };
 
   const toggleVideoSelection = (videoId) => {
