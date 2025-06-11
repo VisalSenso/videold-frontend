@@ -145,19 +145,41 @@ function Home() {
     const fixedUrl = normalizeUrl(url);
     if (!fixedUrl || !selectedFormat) return;
     setDownloadingId("single");
-    const params = new URLSearchParams({
-      url: fixedUrl,
-      quality: selectedFormat,
-    });
-    const downloadUrl = `${API_URL}/api/download?${params.toString()}`;
 
-    // Get filename from videoInfo if available
-    let filename = "video.mp4";
-    if (videoInfo && videoInfo.title) {
-      filename = videoInfo.title.replace(/[\\/:*?"<>|]/g, "_") + ".mp4";
+    try {
+      const response = await fetch(`${API_URL}/api/downloads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: fixedUrl,
+          quality: selectedFormat,
+          downloadId: "single",
+        }),
+      });
+
+      if (!response.ok) throw new Error("Network response was not ok");
+
+      // Get filename from videoInfo if available
+      let filename = "video.mp4";
+      if (videoInfo && videoInfo.title) {
+        filename = videoInfo.title.replace(/[\\/:*?"<>|]/g, "_") + ".mp4";
+      }
+
+      const blob = await response.blob();
+      const urlObj = window.URL.createObjectURL(blob);
+
+      // Trigger download
+      const a = document.createElement("a");
+      a.href = urlObj;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(urlObj);
+    } catch (e) {
+      alert("Download failed.");
     }
-
-    await advancedDownload(downloadUrl, filename);
+    setDownloadingId(null);
   };
 
   const advancedDownloadPlaylist = async (video, onProgress) => {
@@ -243,7 +265,8 @@ function Home() {
     }));
 
     try {
-      const response = await fetch(`${API_URL}/api/download-playlist`, {
+      // CHANGE THIS ENDPOINT:
+      const response = await fetch(`${API_URL}/api/multi-downloads`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ videos: payload }),
