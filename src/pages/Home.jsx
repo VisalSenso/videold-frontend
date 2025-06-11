@@ -18,8 +18,6 @@ function Home() {
   const [formatFilter, setFormatFilter] = useState("all");
   const [downloadingId, setDownloadingId] = useState(null); // Track which download is spinning
 
-  // Remove all download progress and socket logic
-
   // Helper: ensure URL has protocol
   function normalizeUrl(inputUrl) {
     if (!inputUrl) return "";
@@ -137,7 +135,12 @@ function Home() {
         {downloadingId && (
           <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 flex flex-col items-center gap-3 shadow-lg">
-              <FontAwesomeIcon icon={faSpinner} spin size="2x" className="text-primary" />
+              <FontAwesomeIcon
+                icon={faSpinner}
+                spin
+                size="2x"
+                className="text-primary"
+              />
               <span className="text-lg font-semibold text-primary">
                 Preparing download...
               </span>
@@ -318,12 +321,19 @@ function Home() {
                       >
                         {downloadingId === video.id ? (
                           <>
-                            <FontAwesomeIcon icon={faSpinner} spin className="w-5 h-5" />
+                            <FontAwesomeIcon
+                              icon={faSpinner}
+                              spin
+                              className="w-5 h-5"
+                            />
                             Preparing...
                           </>
                         ) : (
                           <>
-                            <FontAwesomeIcon icon={faDownload} className="w-5 h-5" />
+                            <FontAwesomeIcon
+                              icon={faDownload}
+                              className="w-5 h-5"
+                            />
                             Download
                           </>
                         )}
@@ -414,13 +424,15 @@ function Home() {
                 >
                   {downloadingId === "single" ? (
                     <>
-                      <FontAwesomeIcon icon={faSpinner} spin className="w-5 h-5" />
+                      <FontAwesomeIcon
+                        icon={faSpinner}
+                        spin
+                        className="w-5 h-5"
+                      />
                       Preparing...
                     </>
                   ) : (
-                    <>
-                      ⬇️ Download
-                    </>
+                    <>⬇️ Download</>
                   )}
                 </button>
               </div>
