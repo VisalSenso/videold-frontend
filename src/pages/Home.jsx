@@ -124,11 +124,11 @@ function Home() {
 
     triggerDirectDownload(downloadUrl);
 
-    // Fallback: hide spinner after 30s if nothing happens
+    // Hide spinner after 4 seconds (covers most cases)
     setTimeout(() => {
       setDownloadingId(null);
       document.removeEventListener("visibilitychange", handleVisibility);
-    }, 30000);
+    }, 4000);
   };
 
   const handleDirectDownloadPlaylist = (video) => {
@@ -138,8 +138,22 @@ function Home() {
       quality: selectedFormats[video.id] || video.formats?.[0]?.format_id,
     });
     const downloadUrl = `${API_URL}/api/download?${params.toString()}`;
+
+    // Listen for tab visibility change
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        setDownloadingId(null);
+        document.removeEventListener("visibilitychange", handleVisibility);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
     triggerDirectDownload(downloadUrl);
-    setTimeout(() => setDownloadingId(null), 3000);
+
+    setTimeout(() => {
+      setDownloadingId(null);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    }, 4000);
   };
 
   const toggleVideoSelection = (videoId) => {
