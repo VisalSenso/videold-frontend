@@ -128,7 +128,7 @@ function Home() {
     setTimeout(() => {
       setDownloadingId(null);
       document.removeEventListener("visibilitychange", handleVisibility);
-    }, 4000);
+    },);
   };
 
   const handleDirectDownloadPlaylist = (video) => {
