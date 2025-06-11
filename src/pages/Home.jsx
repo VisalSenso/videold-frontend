@@ -188,6 +188,7 @@ function Home() {
           <button
             onClick={handleFetchInfo}
             className="bg-primary cursor-pointer text-[#ffffff] px-6 py-3 rounded-lg"
+            disabled={downloadingId === "single"}
           >
             {loading ? "Loading..." : "Fetch"}
           </button>
