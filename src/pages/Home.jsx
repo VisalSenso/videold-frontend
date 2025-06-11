@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faDownload, faPlay, faSpinner } from "@fortawesome/free-solid-svg-icons";
+import {
+  faDownload,
+  faPlay,
+  faSpinner,
+} from "@fortawesome/free-solid-svg-icons";
 import Howto from "../components/Howto";
 // Use deployed backend as default
 const API_URL =
@@ -78,9 +82,9 @@ function Home() {
 
   // Helper: get progressive formats (audio+video)
   function getProgressiveFormats(formats) {
-    return formats?.filter(
-      (f) => f.acodec !== "none" && f.vcodec !== "none"
-    ) || [];
+    return (
+      formats?.filter((f) => f.acodec !== "none" && f.vcodec !== "none") || []
+    );
   }
 
   // Helper: filter formats, but prefer progressive for default
@@ -108,9 +112,23 @@ function Home() {
       quality: selectedFormat,
     });
     const downloadUrl = `${API_URL}/api/download?${params.toString()}`;
+
+    // Listen for tab visibility change (download dialog opens)
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        setDownloadingId(null);
+        document.removeEventListener("visibilitychange", handleVisibility);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
     triggerDirectDownload(downloadUrl);
-    // Show spinner/message for 3 seconds (matches backend delay)
-    setTimeout(() => setDownloadingId(null), 3000);
+
+    // Fallback: hide spinner after 30s if nothing happens
+    setTimeout(() => {
+      setDownloadingId(null);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    }, 30000);
   };
 
   const handleDirectDownloadPlaylist = (video) => {
@@ -139,7 +157,6 @@ function Home() {
   return (
     <div className="min-h-screen bg-[#ffffff] text-text-color p-6 flex items-center justify-center">
       <div className="w-full max-w-3xl  p-8 space-y-6">
-      
         {/* Google AdSense ad unit */}
         <div className="flex justify-center my-4">
           <ins
@@ -410,10 +427,18 @@ function Home() {
                           {progressive.length > 0 && (
                             <optgroup label="Fastest (audio+video)">
                               {progressive.map((format) => (
-                                <option key={format.format_id} value={format.format_id}>
-                                  {format.resolution || format.format_note || "Unknown"} • {format.ext} •{" "}
+                                <option
+                                  key={format.format_id}
+                                  value={format.format_id}
+                                >
+                                  {format.resolution ||
+                                    format.format_note ||
+                                    "Unknown"}{" "}
+                                  • {format.ext} •{" "}
                                   {format.filesize
-                                    ? (format.filesize / (1024 * 1024)).toFixed(1) + " MB"
+                                    ? (format.filesize / (1024 * 1024)).toFixed(
+                                        1
+                                      ) + " MB"
                                     : "N/A"}{" "}
                                   🚀
                                 </option>
@@ -423,10 +448,18 @@ function Home() {
                           {nonProgressive.length > 0 && (
                             <optgroup label="Other (may take longer)">
                               {nonProgressive.map((format) => (
-                                <option key={format.format_id} value={format.format_id}>
-                                  {format.resolution || format.format_note || "Unknown"} • {format.ext} •{" "}
+                                <option
+                                  key={format.format_id}
+                                  value={format.format_id}
+                                >
+                                  {format.resolution ||
+                                    format.format_note ||
+                                    "Unknown"}{" "}
+                                  • {format.ext} •{" "}
                                   {format.filesize
-                                    ? (format.filesize / (1024 * 1024)).toFixed(1) + " MB"
+                                    ? (format.filesize / (1024 * 1024)).toFixed(
+                                        1
+                                      ) + " MB"
                                     : "N/A"}
                                 </option>
                               ))}
@@ -456,6 +489,12 @@ function Home() {
                     <>⬇️ Download</>
                   )}
                 </button>
+                {downloadingId === "single" && (
+                  <div className="text-xs text-gray-400 mt-2 text-center">
+                    Preparing your download. This may take a few seconds
+                    depending on the video site.
+                  </div>
+                )}
               </div>
             </div>
           </div>
