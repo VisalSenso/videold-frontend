@@ -76,7 +76,14 @@ function Home() {
   // Helper to check if a URL is a Facebook link
   const isFacebookUrl = (url) => url && url.includes("facebook.com");
 
-  // 2. Helper to filter formats
+  // Helper: get progressive formats (audio+video)
+  function getProgressiveFormats(formats) {
+    return formats?.filter(
+      (f) => f.acodec !== "none" && f.vcodec !== "none"
+    ) || [];
+  }
+
+  // Helper: filter formats, but prefer progressive for default
   const filterFormats = (formats) => {
     if (formatFilter === "all") return formats;
     return formats.filter((f) => f.ext && f.ext.toLowerCase() === formatFilter);
@@ -391,15 +398,43 @@ function Home() {
                     onChange={(e) => setSelectedFormat(e.target.value)}
                     disabled={isFacebookUrl(url)}
                   >
-                    {filterFormats(videoInfo.formats)?.map((format) => (
-                      <option key={format.format_id} value={format.format_id}>
-                        {format.resolution || format.format_note || "Unknown"} •{" "}
-                        {format.ext} •{" "}
-                        {format.filesize
-                          ? (format.filesize / (1024 * 1024)).toFixed(1) + " MB"
-                          : "N/A"}
-                      </option>
-                    ))}
+                    {/* Prefer progressive formats at the top */}
+                    {(() => {
+                      const allFormats = filterFormats(videoInfo.formats);
+                      const progressive = getProgressiveFormats(allFormats);
+                      const nonProgressive = allFormats.filter(
+                        (f) => !(f.acodec !== "none" && f.vcodec !== "none")
+                      );
+                      return (
+                        <>
+                          {progressive.length > 0 && (
+                            <optgroup label="Fastest (audio+video)">
+                              {progressive.map((format) => (
+                                <option key={format.format_id} value={format.format_id}>
+                                  {format.resolution || format.format_note || "Unknown"} • {format.ext} •{" "}
+                                  {format.filesize
+                                    ? (format.filesize / (1024 * 1024)).toFixed(1) + " MB"
+                                    : "N/A"}{" "}
+                                  🚀
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                          {nonProgressive.length > 0 && (
+                            <optgroup label="Other (may take longer)">
+                              {nonProgressive.map((format) => (
+                                <option key={format.format_id} value={format.format_id}>
+                                  {format.resolution || format.format_note || "Unknown"} • {format.ext} •{" "}
+                                  {format.filesize
+                                    ? (format.filesize / (1024 * 1024)).toFixed(1) + " MB"
+                                    : "N/A"}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </>
+                      );
+                    })()}
                   </select>
                 )}
                 {/* Download button opens direct download in new tab */}
