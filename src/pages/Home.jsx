@@ -1,6 +1,4 @@
-import { useState, useRef } from "react";
-import axios from "axios";
-import { io } from "socket.io-client";
+import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faDownload, faPlay, faSpinner } from "@fortawesome/free-solid-svg-icons";
 import Howto from "../components/Howto";
@@ -18,7 +16,7 @@ function Home() {
   const [selectedFormats, setSelectedFormats] = useState({});
   const [selectedVideos, setSelectedVideos] = useState(new Set());
   const [formatFilter, setFormatFilter] = useState("all");
-  const [preparingDownload, setPreparingDownload] = useState(false); // Spinner state
+  const [downloadingId, setDownloadingId] = useState(null); // Track which download is spinning
 
   // Remove all download progress and socket logic
 
@@ -99,26 +97,25 @@ function Home() {
   const handleDirectDownload = () => {
     const fixedUrl = normalizeUrl(url);
     if (!fixedUrl || !selectedFormat) return;
-    setPreparingDownload(true);
+    setDownloadingId("single");
     const params = new URLSearchParams({
       url: fixedUrl,
       quality: selectedFormat,
     });
     const downloadUrl = `${API_URL}/api/downloads?${params.toString()}`;
     triggerDirectDownload(downloadUrl);
-    setTimeout(() => setPreparingDownload(false), 2000);
+    setTimeout(() => setDownloadingId(null), 2000);
   };
 
-  // For playlist: direct download for each video
   const handleDirectDownloadPlaylist = (video) => {
-    setPreparingDownload(true);
+    setDownloadingId(video.id);
     const params = new URLSearchParams({
       url: video.url,
       quality: selectedFormats[video.id] || video.formats?.[0]?.format_id,
     });
     const downloadUrl = `${API_URL}/api/downloads?${params.toString()}`;
     triggerDirectDownload(downloadUrl);
-    setTimeout(() => setPreparingDownload(false), 2000);
+    setTimeout(() => setDownloadingId(null), 2000);
   };
 
   const toggleVideoSelection = (videoId) => {
@@ -137,11 +134,13 @@ function Home() {
     <div className="min-h-screen bg-[#ffffff] text-text-color p-6 flex items-center justify-center">
       <div className="w-full max-w-3xl  p-8 space-y-6">
         {/* Spinner overlay */}
-        {preparingDownload && (
+        {downloadingId && (
           <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 flex flex-col items-center gap-3 shadow-lg">
               <FontAwesomeIcon icon={faSpinner} spin size="2x" className="text-primary" />
-              <span className="text-lg font-semibold text-primary">Preparing download...</span>
+              <span className="text-lg font-semibold text-primary">
+                Preparing download...
+              </span>
             </div>
           </div>
         )}
@@ -315,12 +314,19 @@ function Home() {
                       <button
                         onClick={() => handleDirectDownloadPlaylist(video)}
                         className="bg-primary cursor-pointer text-text-btn px-4 py-2 rounded-md flex items-center gap-2 shadow hover:bg-blue-700 focus:ring-2 focus:ring-blue-400 transition"
+                        disabled={downloadingId === video.id}
                       >
-                        <FontAwesomeIcon
-                          icon={faDownload}
-                          className="w-5 h-5"
-                        />
-                        Download
+                        {downloadingId === video.id ? (
+                          <>
+                            <FontAwesomeIcon icon={faSpinner} spin className="w-5 h-5" />
+                            Preparing...
+                          </>
+                        ) : (
+                          <>
+                            <FontAwesomeIcon icon={faDownload} className="w-5 h-5" />
+                            Download
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>
@@ -403,9 +409,19 @@ function Home() {
                 {/* Download button opens direct download in new tab */}
                 <button
                   onClick={handleDirectDownload}
-                  className="mt-4 w-full bg-primary cursor-pointer text-text-btn py-3 rounded-lg font-semibold"
+                  className="mt-4 w-full bg-primary cursor-pointer text-text-btn py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
+                  disabled={downloadingId === "single"}
                 >
-                  ⬇️ Download
+                  {downloadingId === "single" ? (
+                    <>
+                      <FontAwesomeIcon icon={faSpinner} spin className="w-5 h-5" />
+                      Preparing...
+                    </>
+                  ) : (
+                    <>
+                      ⬇️ Download
+                    </>
+                  )}
                 </button>
               </div>
             </div>
