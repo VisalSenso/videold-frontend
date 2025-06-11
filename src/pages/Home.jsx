@@ -21,6 +21,7 @@ function Home() {
   const [selectedVideos, setSelectedVideos] = useState(new Set());
   const [formatFilter, setFormatFilter] = useState("all");
   const [downloadingId, setDownloadingId] = useState(null);
+  const [downloadingZip, setDownloadingZip] = useState(false);
 
   // Helper: ensure URL has protocol
   function normalizeUrl(inputUrl) {
@@ -103,7 +104,44 @@ function Home() {
     document.body.removeChild(a);
   };
 
-  const handleDirectDownload = () => {
+  // Advanced download with fetch and stream
+  const advancedDownload = async (downloadUrl, filename, onProgress) => {
+    setDownloadingId("single");
+    try {
+      const response = await fetch(downloadUrl);
+      if (!response.ok) throw new Error("Network response was not ok");
+
+      const contentLength = response.headers.get("content-length");
+      const total = contentLength ? parseInt(contentLength, 10) : null;
+      let loaded = 0;
+
+      const reader = response.body.getReader();
+      const chunks = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.length;
+        if (onProgress && total) onProgress(loaded / total);
+      }
+      const blob = new Blob(chunks);
+      const url = window.URL.createObjectURL(blob);
+
+      // Trigger download
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || "video.mp4";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("Download failed.");
+    }
+    setDownloadingId(null);
+  };
+
+  const handleDirectDownload = async () => {
     const fixedUrl = normalizeUrl(url);
     if (!fixedUrl || !selectedFormat) return;
     setDownloadingId("single");
@@ -113,47 +151,65 @@ function Home() {
     });
     const downloadUrl = `${API_URL}/api/download?${params.toString()}`;
 
-    // Listen for tab visibility change (download dialog opens)
-    const handleVisibility = () => {
-      if (document.visibilityState === "hidden") {
-        setDownloadingId(null);
-        document.removeEventListener("visibilitychange", handleVisibility);
+    // Get filename from videoInfo if available
+    let filename = "video.mp4";
+    if (videoInfo && videoInfo.title) {
+      filename = videoInfo.title.replace(/[\\/:*?"<>|]/g, "_") + ".mp4";
+    }
+
+    await advancedDownload(downloadUrl, filename);
+  };
+
+  const advancedDownloadPlaylist = async (video, onProgress) => {
+    setDownloadingId(video.id);
+    try {
+      const params = new URLSearchParams({
+        url: video.url,
+        quality: selectedFormats[video.id] || video.formats?.[0]?.format_id,
+      });
+      const downloadUrl = `${API_URL}/api/download?${params.toString()}`;
+
+      // Get filename from video title
+      let filename = "video.mp4";
+      if (video.title) {
+        filename = video.title.replace(/[\\/:*?"<>|]/g, "_") + ".mp4";
       }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
 
-    triggerDirectDownload(downloadUrl);
+      const response = await fetch(downloadUrl);
+      if (!response.ok) throw new Error("Network response was not ok");
 
-    // Hide spinner after 4 seconds (covers most cases)
-    setTimeout(() => {
-      setDownloadingId(null);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    },);
+      const contentLength = response.headers.get("content-length");
+      const total = contentLength ? parseInt(contentLength, 10) : null;
+      let loaded = 0;
+
+      const reader = response.body.getReader();
+      const chunks = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        loaded += value.length;
+        if (onProgress && total) onProgress(loaded / total);
+      }
+      const blob = new Blob(chunks);
+      const url = window.URL.createObjectURL(blob);
+
+      // Trigger download
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("Download failed.");
+    }
+    setDownloadingId(null);
   };
 
   const handleDirectDownloadPlaylist = (video) => {
-    setDownloadingId(video.id);
-    const params = new URLSearchParams({
-      url: video.url,
-      quality: selectedFormats[video.id] || video.formats?.[0]?.format_id,
-    });
-    const downloadUrl = `${API_URL}/api/download?${params.toString()}`;
-
-    // Listen for tab visibility change
-    const handleVisibility = () => {
-      if (document.visibilityState === "hidden") {
-        setDownloadingId(null);
-        document.removeEventListener("visibilitychange", handleVisibility);
-      }
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-
-    triggerDirectDownload(downloadUrl);
-
-    setTimeout(() => {
-      setDownloadingId(null);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    }, 4000);
+    advancedDownloadPlaylist(video);
   };
 
   const toggleVideoSelection = (videoId) => {
@@ -166,6 +222,46 @@ function Home() {
       }
       return newSet;
     });
+  };
+
+  const handleDownloadAllAsZip = async () => {
+    if (!videoInfo?.videos?.length) return;
+    setDownloadingZip(true);
+
+    // Only include selected videos, or all if none selected
+    const videosToDownload = Array.from(selectedVideos).length
+      ? videoInfo.videos.filter((v) => selectedVideos.has(v.id))
+      : videoInfo.videos;
+
+    const payload = videosToDownload.map((video) => ({
+      url: video.url,
+      quality: selectedFormats[video.id] || video.formats?.[0]?.format_id,
+      title: video.title,
+    }));
+
+    try {
+      const response = await fetch(`${API_URL}/api/download-playlist`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ videos: payload }),
+      });
+
+      if (!response.ok) throw new Error("Failed to download ZIP");
+
+      // Stream the zip file and trigger download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = (videoInfo.title || "playlist") + ".zip";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("Failed to download ZIP.");
+    }
+    setDownloadingZip(false);
   };
 
   return (
@@ -512,6 +608,32 @@ function Home() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+        {isPlaylist && videoInfo?.videos?.length > 0 && (
+          <div className="flex justify-center mb-4">
+            <button
+              onClick={handleDownloadAllAsZip}
+              className="bg-primary text-white px-6 py-2 rounded-lg flex items-center gap-2"
+              disabled={downloadingZip}
+            >
+              {downloadingZip ? (
+                <>
+                  <FontAwesomeIcon icon={faSpinner} spin className="w-5 h-5" />
+                  Preparing ZIP...
+                </>
+              ) : (
+                <>
+                  <FontAwesomeIcon icon={faDownload} className="w-5 h-5" />
+                  Download All as ZIP
+                </>
+              )}
+            </button>
+          </div>
+        )}
+        {downloadingZip && (
+          <div className="text-xs text-gray-400 mt-2 text-center">
+            Preparing ZIP archive. This may take a while for large playlists.
           </div>
         )}
         <Howto />
