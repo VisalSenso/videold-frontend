@@ -403,41 +403,24 @@ function Home() {
                   </select>
                 )}
                 {/* Download button opens direct download in new tab */}
-                {videoInfo && videoInfo.formats && videoInfo.formats.length > 0 ? (
-                  <>
-                    {/* Show the format dropdown and download button as usual */}
-                    <select
-                      className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color focus:ring-2 focus:ring-primary focus:border-primary transition"
-                      value={selectedFormat || ""}
-                      onChange={(e) => setSelectedFormat(e.target.value)}
-                      disabled={isFacebookUrl(url)}
-                    >
-                      {videoInfo.formats.map((format) => (
-                        <option key={format.format_id} value={format.format_id}>
-                          {(format.format_note || format.resolution || "Unknown") +
-                            " • " +
-                            format.ext +
-                            " • " +
-                            (format.filesize
-                              ? (format.filesize / (1024 * 1024)).toFixed(1) + " MB"
-                              : "N/A")}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={handleDirectDownload}
-                      className="mt-4 w-full bg-primary cursor-pointer text-text-btn py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
-                      disabled={!selectedFormat}
-                    >
-                      ⬇️ Download
-                    </button>
-                  </>
-                ) : (
-                  <div className="mt-4 text-center text-red-500 font-semibold">
-                    Sorry, this video cannot be downloaded.<br />
-                    It may be private, protected, or region-locked.
-                  </div>
-                )}
+                <button
+                  onClick={handleDirectDownload}
+                  className="mt-4 w-full bg-primary cursor-pointer text-text-btn py-3 rounded-lg font-semibold flex items-center justify-center gap-2"
+                  disabled={downloadingId === "single"}
+                >
+                  {downloadingId === "single" ? (
+                    <>
+                      <FontAwesomeIcon
+                        icon={faSpinner}
+                        spin
+                        className="w-5 h-5"
+                      />
+                      Preparing...
+                    </>
+                  ) : (
+                    <>⬇️ Download</>
+                  )}
+                </button>
               </div>
             </div>
           </div>
