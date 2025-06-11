@@ -48,7 +48,7 @@ function Home() {
     setSelectedFormats({});
     setSelectedVideos(new Set());
     try {
-      const res = await fetch(`${API_URL}/api/info`, {
+      const res = await fetch(`${API_URL}/api/init-download`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: fixedUrl }),
