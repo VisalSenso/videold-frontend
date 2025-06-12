@@ -51,8 +51,10 @@ function Home() {
       const res = await fetch(`${API_URL}/api/downloads`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: fixedUrl }),
+        body: JSON.stringify({ url: fixedUrl, quality: selectedFormat }),
       });
+      if (!res.ok) throw new Error("Network response was not ok");
+
       const data = await res.json();
       console.log("Fetched video info:", data);
       if (data.isPlaylist) {
