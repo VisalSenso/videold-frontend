@@ -77,7 +77,7 @@ function Home() {
   function selectedFormatExt() {
     if (!videoInfo || !videoInfo.formats) return null;
     const fmt = videoInfo.formats.find((f) => f.format_id === selectedFormat);
-    return fmt?.ext || null;
+    return fmt?.ext | null;
   }
 
   // Helper to check if a URL is a Facebook link
@@ -147,19 +147,35 @@ function Home() {
     const fixedUrl = normalizeUrl(url);
     if (!fixedUrl || !selectedFormat) return;
     setDownloadingId("single");
-    const params = new URLSearchParams({
-      url: fixedUrl,
-      quality: selectedFormat,
-    });
-    const downloadUrl = `${API_URL}/api/downloads?${params.toString()}`;
 
-    // Get filename from videoInfo if available
     let filename = "video.mp4";
     if (videoInfo && videoInfo.title) {
       filename = videoInfo.title.replace(/[\\/:*?"<>|]/g, "_") + ".mp4";
     }
 
-    await advancedDownload(downloadUrl, filename);
+    try {
+      const response = await fetch(`${API_URL}/api/downloads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: fixedUrl, quality: selectedFormat }),
+      });
+      if (!response.ok) throw new Error("Network response was not ok");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      // Trigger download
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("Download failed.");
+    }
+    setDownloadingId(null);
   };
 
   const advancedDownloadPlaylist = async (video, onProgress) => {
