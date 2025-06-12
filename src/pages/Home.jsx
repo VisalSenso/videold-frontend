@@ -332,7 +332,7 @@ function Home() {
             <h2 className="text-lg font-semibold text-center">
               {videoInfo.title}
             </h2>
-           
+
             <p className="text-sm text-center text-gray-400">
               Select videos to download
             </p>
@@ -477,12 +477,6 @@ function Home() {
               )}
               <div className="flex-1">
                 <h2 className="text-xl font-semibold">{videoInfo.title}</h2>
-                {isFacebookUrl(url) && (
-                  <div className="text-yellow-400 text-sm font-semibold mb-2">
-                    For Facebook videos, only the best quality will be
-                    downloaded for compatibility. Quality selection is disabled.
-                  </div>
-                )}
 
                 {/* Format filter tabs for single video */}
                 {videoInfo && !isPlaylist && videoInfo.formats && (
@@ -503,16 +497,11 @@ function Home() {
                   </div>
                 )}
 
-                {isFacebookUrl(url) ? (
-                  <div className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color bg-gray-100 text-center font-semibold">
-                    Best available video+audio (auto-selected for compatibility)
-                  </div>
-                ) : (
+                {videoInfo?.formats && (
                   <select
                     className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color focus:ring-2 focus:ring-primary focus:border-primary transition"
                     value={selectedFormat || ""}
                     onChange={(e) => setSelectedFormat(e.target.value)}
-                    disabled={isFacebookUrl(url)}
                   >
                     {/* Prefer progressive formats at the top */}
                     {(() => {
@@ -569,6 +558,7 @@ function Home() {
                     })()}
                   </select>
                 )}
+
                 {/* Download button opens direct download in new tab */}
                 <button
                   onClick={handleDirectDownload}
@@ -598,6 +588,7 @@ function Home() {
             </div>
           </div>
         )}
+
         {isPlaylist && videoInfo?.videos?.length > 0 && (
           <div className="flex justify-center mb-4">
             <button
