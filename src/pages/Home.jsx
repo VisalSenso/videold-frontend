@@ -77,11 +77,11 @@ function Home() {
   function selectedFormatExt() {
     if (!videoInfo || !videoInfo.formats) return null;
     const fmt = videoInfo.formats.find((f) => f.format_id === selectedFormat);
-    return fmt?.ext | null;
+    return fmt?.ext || null;
   }
 
   // Helper to check if a URL is a Facebook link
-  //const isFacebookUrl = (url) => url && url.includes("facebook.com");
+  const isFacebookUrl = (url) => url && url.includes("facebook.com");
 
   // Helper: get progressive formats (audio+video)
   function getProgressiveFormats(formats) {
@@ -147,35 +147,19 @@ function Home() {
     const fixedUrl = normalizeUrl(url);
     if (!fixedUrl || !selectedFormat) return;
     setDownloadingId("single");
+    const params = new URLSearchParams({
+      url: fixedUrl,
+      quality: selectedFormat,
+    });
+    const downloadUrl = `${API_URL}/api/downloads?${params.toString()}`;
 
+    // Get filename from videoInfo if available
     let filename = "video.mp4";
     if (videoInfo && videoInfo.title) {
       filename = videoInfo.title.replace(/[\\/:*?"<>|]/g, "_") + ".mp4";
     }
 
-    try {
-      const response = await fetch(`${API_URL}/api/downloads`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: fixedUrl, quality: selectedFormat }),
-      });
-      if (!response.ok) throw new Error("Network response was not ok");
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-
-      // Trigger download
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (e) {
-      alert("Download failed.");
-    }
-    setDownloadingId(null);
+    await advancedDownload(downloadUrl, filename);
   };
 
   const advancedDownloadPlaylist = async (video, onProgress) => {
@@ -332,7 +316,12 @@ function Home() {
             <h2 className="text-lg font-semibold text-center">
               {videoInfo.title}
             </h2>
-
+            {isFacebookUrl(url) && (
+              <div className="text-yellow-400 text-center text-sm font-semibold">
+                For Facebook videos, only the best quality will be downloaded
+                for compatibility. Quality selection is disabled.
+              </div>
+            )}
             <p className="text-sm text-center text-gray-400">
               Select videos to download
             </p>
@@ -477,6 +466,12 @@ function Home() {
               )}
               <div className="flex-1">
                 <h2 className="text-xl font-semibold">{videoInfo.title}</h2>
+                {isFacebookUrl(url) && (
+                  <div className="text-yellow-400 text-sm font-semibold mb-2">
+                    For Facebook videos, only the best quality will be
+                    downloaded for compatibility. Quality selection is disabled.
+                  </div>
+                )}
 
                 {/* Format filter tabs for single video */}
                 {videoInfo && !isPlaylist && videoInfo.formats && (
@@ -497,11 +492,16 @@ function Home() {
                   </div>
                 )}
 
-                {videoInfo?.formats && (
+                {isFacebookUrl(url) ? (
+                  <div className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color bg-gray-100 text-center font-semibold">
+                    Best available video+audio (auto-selected for compatibility)
+                  </div>
+                ) : (
                   <select
                     className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color focus:ring-2 focus:ring-primary focus:border-primary transition"
                     value={selectedFormat || ""}
                     onChange={(e) => setSelectedFormat(e.target.value)}
+                    disabled={isFacebookUrl(url)}
                   >
                     {/* Prefer progressive formats at the top */}
                     {(() => {
@@ -558,7 +558,6 @@ function Home() {
                     })()}
                   </select>
                 )}
-
                 {/* Download button opens direct download in new tab */}
                 <button
                   onClick={handleDirectDownload}
@@ -588,7 +587,6 @@ function Home() {
             </div>
           </div>
         )}
-
         {isPlaylist && videoInfo?.videos?.length > 0 && (
           <div className="flex justify-center mb-4">
             <button
