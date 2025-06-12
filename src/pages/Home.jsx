@@ -143,40 +143,48 @@ function Home() {
     setDownloadingId(null);
   };
 
-  const handleDirectDownload = async () => {
-    const fixedUrl = normalizeUrl(url);
-    if (!fixedUrl || !selectedFormat) return;
-    setDownloadingId("single");
+ const handleDirectDownload = async () => {
+  const fixedUrl = normalizeUrl(url);
+  const isFacebook = isFacebookUrl(fixedUrl);
 
-    let filename = "video.mp4";
-    if (videoInfo && videoInfo.title) {
-      filename = videoInfo.title.replace(/[\\/:*?"<>|]/g, "_") + ".mp4";
-    }
+  // Allow download if Facebook even without selectedFormat
+  if (!fixedUrl || (!selectedFormat && !isFacebook)) return;
 
-    try {
-      const response = await fetch(`${API_URL}/api/downloads`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: fixedUrl, quality: selectedFormat }),
-      });
-      if (!response.ok) throw new Error("Network response was not ok");
+  setDownloadingId("single");
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+  let filename = "video.mp4";
+  if (videoInfo?.title) {
+    filename = videoInfo.title.replace(/[\\/:*?"<>|]/g, "_") + ".mp4";
+  }
 
-      // Trigger download
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (e) {
-      alert("Download failed.");
-    }
-    setDownloadingId(null);
-  };
+  try {
+    const response = await fetch(`${API_URL}/api/downloads`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: fixedUrl,
+        ...(selectedFormat ? { quality: selectedFormat } : {}), // only include quality if it's selected
+      }),
+    });
+
+    if (!response.ok) throw new Error("Network response was not ok");
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  } catch (e) {
+    alert("Download failed.");
+  }
+
+  setDownloadingId(null);
+};
 
   const advancedDownloadPlaylist = async (video, onProgress) => {
     setDownloadingId(video.id);
