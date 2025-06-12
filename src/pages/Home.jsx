@@ -494,14 +494,14 @@ function Home() {
 
                 {isFacebookUrl(url) ? (
                   <div className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color bg-gray-100 text-center font-semibold">
-                    Best available video+audio (auto-selected for compatibility)
+                     Facebook format selection supported. Choose your preferred format.
                   </div>
                 ) : (
                   <select
                     className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color focus:ring-2 focus:ring-primary focus:border-primary transition"
                     value={selectedFormat || ""}
                     onChange={(e) => setSelectedFormat(e.target.value)}
-                    //disabled={isFacebookUrl(url)}
+                    disabled={false}
                   >
                     {/* Prefer progressive formats at the top */}
                     {(() => {
