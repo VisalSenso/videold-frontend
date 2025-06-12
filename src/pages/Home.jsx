@@ -228,10 +228,15 @@ function Home() {
     if (!videoInfo?.videos?.length) return;
     setDownloadingZip(true);
 
-    // Only include selected videos, or all if none selected
-    const videosToDownload = Array.from(selectedVideos).length
-      ? videoInfo.videos.filter((v) => selectedVideos.has(v.id))
-      : videoInfo.videos;
+    // Only include selected videos
+    const videosToDownload = videoInfo.videos.filter((v) =>
+      selectedVideos.has(v.id)
+    );
+    if (videosToDownload.length === 0) {
+      alert("Please select at least one video to download.");
+      setDownloadingZip(false);
+      return;
+    }
 
     const payload = videosToDownload.map((video) => ({
       url: video.url,
@@ -615,7 +620,7 @@ function Home() {
             <button
               onClick={handleDownloadAllAsZip}
               className="bg-primary text-white px-6 py-2 rounded-lg flex items-center gap-2"
-              disabled={downloadingZip}
+              disabled={downloadingZip || selectedVideos.size === 0}
             >
               {downloadingZip ? (
                 <>
@@ -636,6 +641,9 @@ function Home() {
             Preparing ZIP archive. This may take a while for large playlists.
           </div>
         )}
+        <div className="text-xs text-gray-500 text-center mb-2">
+          {selectedVideos.size} video(s) selected
+        </div>
         <Howto />
       </div>
     </div>
