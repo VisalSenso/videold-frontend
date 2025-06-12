@@ -397,7 +397,7 @@ function Home() {
                           [video.id]: e.target.value,
                         }))
                       }
-                      disabled={isFacebookUrl(url)}
+                      disabled={false}
                     >
                       {filterFormats(video.formats)?.map((format) => (
                         <option key={format.format_id} value={format.format_id}>
