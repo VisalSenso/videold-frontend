@@ -51,7 +51,7 @@ function Home() {
       const res = await fetch(`${API_URL}/api/downloads`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: fixedUrl, quality: selectedFormat }),
+        body: JSON.stringify({ url: fixedUrl }), // Do NOT send quality for info fetch
       });
       if (!res.ok) throw new Error("Network response was not ok");
 
