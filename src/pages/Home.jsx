@@ -81,7 +81,7 @@ function Home() {
   }
 
   // Helper to check if a URL is a Facebook link
-  const isFacebookUrl = (url) => url && url.includes("facebook.com");
+  //const isFacebookUrl = (url) => url && url.includes("facebook.com");
 
   // Helper: get progressive formats (audio+video)
   function getProgressiveFormats(formats) {
@@ -332,12 +332,7 @@ function Home() {
             <h2 className="text-lg font-semibold text-center">
               {videoInfo.title}
             </h2>
-            {isFacebookUrl(url) && (
-              <div className="text-yellow-400 text-center text-sm font-semibold">
-                For Facebook videos, only the best quality will be downloaded
-                for compatibility. Quality selection is disabled.
-              </div>
-            )}
+           
             <p className="text-sm text-center text-gray-400">
               Select videos to download
             </p>
