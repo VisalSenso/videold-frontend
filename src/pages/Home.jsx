@@ -77,7 +77,7 @@ function Home() {
   function selectedFormatExt() {
     if (!videoInfo || !videoInfo.formats) return null;
     const fmt = videoInfo.formats.find((f) => f.format_id === selectedFormat);
-    return fmt?.ext || null;
+    return fmt?.ext | null;
   }
 
   // Helper to check if a URL is a Facebook link
@@ -147,19 +147,35 @@ function Home() {
     const fixedUrl = normalizeUrl(url);
     if (!fixedUrl || !selectedFormat) return;
     setDownloadingId("single");
-    const params = new URLSearchParams({
-      url: fixedUrl,
-      quality: selectedFormat,
-    });
-    const downloadUrl = `${API_URL}/api/downloads?${params.toString()}`;
 
-    // Get filename from videoInfo if available
     let filename = "video.mp4";
     if (videoInfo && videoInfo.title) {
       filename = videoInfo.title.replace(/[\\/:*?"<>|]/g, "_") + ".mp4";
     }
 
-    await advancedDownload(downloadUrl, filename);
+    try {
+      const response = await fetch(`${API_URL}/api/downloads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: fixedUrl, quality: selectedFormat }),
+      });
+      if (!response.ok) throw new Error("Network response was not ok");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      // Trigger download
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("Download failed.");
+    }
+    setDownloadingId(null);
   };
 
   const advancedDownloadPlaylist = async (video, onProgress) => {
@@ -397,7 +413,7 @@ function Home() {
                           [video.id]: e.target.value,
                         }))
                       }
-                      disabled={false}
+                      disabled={isFacebookUrl(url)}
                     >
                       {filterFormats(video.formats)?.map((format) => (
                         <option key={format.format_id} value={format.format_id}>
@@ -492,73 +508,72 @@ function Home() {
                   </div>
                 )}
 
-                {isFacebookUrl(url) && (
-                  <div className="text-yellow-400 text-sm font-semibold mb-2">
-                    For Facebook videos, only best compatible formats are
-                    supported. If quality fails, try another format.
+                {isFacebookUrl(url) ? (
+                  <div className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color bg-gray-100 text-center font-semibold">
+                    Best available video+audio (auto-selected for compatibility)
                   </div>
+                ) : (
+                  <select
+                    className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color focus:ring-2 focus:ring-primary focus:border-primary transition"
+                    value={selectedFormat || ""}
+                    onChange={(e) => setSelectedFormat(e.target.value)}
+                    disabled={isFacebookUrl(url)}
+                  >
+                    {/* Prefer progressive formats at the top */}
+                    {(() => {
+                      const allFormats = filterFormats(videoInfo.formats);
+                      const progressive = getProgressiveFormats(allFormats);
+                      const nonProgressive = allFormats.filter(
+                        (f) => !(f.acodec !== "none" && f.vcodec !== "none")
+                      );
+                      return (
+                        <>
+                          {progressive.length > 0 && (
+                            <optgroup label="Fastest (audio+video)">
+                              {progressive.map((format) => (
+                                <option
+                                  key={format.format_id}
+                                  value={format.format_id}
+                                >
+                                  {format.resolution ||
+                                    format.format_note ||
+                                    "Unknown"}{" "}
+                                  • {format.ext} •{" "}
+                                  {format.filesize
+                                    ? (format.filesize / (1024 * 1024)).toFixed(
+                                        1
+                                      ) + " MB"
+                                    : "N/A"}{" "}
+                                  🚀
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                          {nonProgressive.length > 0 && (
+                            <optgroup label="Other (may take longer)">
+                              {nonProgressive.map((format) => (
+                                <option
+                                  key={format.format_id}
+                                  value={format.format_id}
+                                >
+                                  {format.resolution ||
+                                    format.format_note ||
+                                    "Unknown"}{" "}
+                                  • {format.ext} •{" "}
+                                  {format.filesize
+                                    ? (format.filesize / (1024 * 1024)).toFixed(
+                                        1
+                                      ) + " MB"
+                                    : "N/A"}
+                                </option>
+                              ))}
+                            </optgroup>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </select>
                 )}
-
-                <select
-                  className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color focus:ring-2 focus:ring-primary focus:border-primary transition"
-                  value={selectedFormat || ""}
-                  onChange={(e) => setSelectedFormat(e.target.value)}
-                  disabled={false}
-                >
-                  {(() => {
-                    const allFormats = filterFormats(videoInfo.formats);
-                    const progressive = getProgressiveFormats(allFormats);
-                    const nonProgressive = allFormats.filter(
-                      (f) => !(f.acodec !== "none" && f.vcodec !== "none")
-                    );
-                    return (
-                      <>
-                        {progressive.length > 0 && (
-                          <optgroup label="Fastest (audio+video)">
-                            {progressive.map((format) => (
-                              <option
-                                key={format.format_id}
-                                value={format.format_id}
-                              >
-                                {format.resolution ||
-                                  format.format_note ||
-                                  "Unknown"}{" "}
-                                • {format.ext} •{" "}
-                                {format.filesize
-                                  ? (format.filesize / (1024 * 1024)).toFixed(
-                                      1
-                                    ) + " MB"
-                                  : "N/A"}{" "}
-                                🚀
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                        {nonProgressive.length > 0 && (
-                          <optgroup label="Other (may take longer)">
-                            {nonProgressive.map((format) => (
-                              <option
-                                key={format.format_id}
-                                value={format.format_id}
-                              >
-                                {format.resolution ||
-                                  format.format_note ||
-                                  "Unknown"}{" "}
-                                • {format.ext} •{" "}
-                                {format.filesize
-                                  ? (format.filesize / (1024 * 1024)).toFixed(
-                                      1
-                                    ) + " MB"
-                                  : "N/A"}
-                              </option>
-                            ))}
-                          </optgroup>
-                        )}
-                      </>
-                    );
-                  })()}
-                </select>
-
                 {/* Download button opens direct download in new tab */}
                 <button
                   onClick={handleDirectDownload}
@@ -588,7 +603,6 @@ function Home() {
             </div>
           </div>
         )}
-
         {isPlaylist && videoInfo?.videos?.length > 0 && (
           <div className="flex justify-center mb-4">
             <button
