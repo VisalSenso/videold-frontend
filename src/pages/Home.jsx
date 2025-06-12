@@ -382,61 +382,31 @@ function Home() {
                   <div className="flex-1 space-y-2">
                     <h3 className="text-lg font-semibold">{video.title}</h3>
 
-                    {/* Format filter tabs for single video */}
-                    {videoInfo && !isPlaylist && videoInfo.formats && (
-                      <div className="flex gap-2 mt-4 mb-2">
-                        {["all", "mp4", "mkv", "webm", "mp3", "m4a"].map(
-                          (type) => (
-                            <button
-                              key={type}
-                              onClick={() => setFormatFilter(type)}
-                              className={`px-3 py-1 rounded-full border text-xs font-semibold transition-colors duration-150 ${
-                                formatFilter === type
-                                  ? "bg-primary text-white border-primary shadow"
-                                  : "bg-white text-primary border-gray-200 hover:bg-blue-50"
-                              }`}
-                            >
-                              {type.toUpperCase()}
-                            </button>
-                          )
-                        )}
-                      </div>
-                    )}
-
-                    {isFacebookUrl(url) ? (
-                      <div className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color bg-gray-100 text-center font-semibold">
-                        Best available video+audio (auto-selected for
-                        compatibility)
-                      </div>
-                    ) : (
-                      <select
-                        className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color focus:ring-2 focus:ring-primary focus:border-primary transition"
-                        value={
-                          selectedFormats[video.id] ||
-                          video.formats?.[0]?.format_id
-                        }
-                        onChange={(e) =>
-                          setSelectedFormats((prev) => ({
-                            ...prev,
-                            [video.id]: e.target.value,
-                          }))
-                        }
-                        disabled={isFacebookUrl(url)}
-                      >
-                        {filterFormats(video.formats)?.map((format) => (
-                          <option
-                            key={format.format_id}
-                            value={format.format_id}
-                          >
-                            {format.format_note || "Unknown"} • {format.ext} •{" "}
-                            {format.filesize
-                              ? (format.filesize / (1024 * 1024)).toFixed(1) +
-                                " MB"
-                              : "N/A"}
-                          </option>
-                        ))}
-                      </select>
-                    )}
+                    {/* Format selection for each video */}
+                    <select
+                      className="mt-3 w-full border border-[#eae9e9] px-4 py-2 rounded-md text-text-color focus:ring-2 focus:ring-primary focus:border-primary transition"
+                      value={
+                        selectedFormats[video.id] ||
+                        (filterFormats(video.formats)[0]?.format_id ?? "")
+                      }
+                      onChange={(e) =>
+                        setSelectedFormats((prev) => ({
+                          ...prev,
+                          [video.id]: e.target.value,
+                        }))
+                      }
+                      disabled={isFacebookUrl(url)}
+                    >
+                      {filterFormats(video.formats)?.map((format) => (
+                        <option key={format.format_id} value={format.format_id}>
+                          {format.format_note || "Unknown"} • {format.ext} •{" "}
+                          {format.filesize
+                            ? (format.filesize / (1024 * 1024)).toFixed(1) +
+                              " MB"
+                            : "N/A"}
+                        </option>
+                      ))}
+                    </select>
 
                     {/* Buttons */}
                     <div className="flex gap-2">
