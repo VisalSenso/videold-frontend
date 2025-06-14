@@ -154,10 +154,18 @@ function Home() {
     }
 
     try {
-      // For Facebook, do NOT send quality
-      const body = isFacebookUrl(fixedUrl)
-        ? { url: fixedUrl }
-        : { url: fixedUrl, quality: selectedFormat };
+      // Always send a quality field for download, even for Facebook
+      // For Facebook, pick the best available format_id
+      let quality = selectedFormat;
+      if (isFacebookUrl(fixedUrl) && videoInfo && videoInfo.formats) {
+        // Pick the best video+audio format_id (usually the last in the list)
+        const bestFormat = videoInfo.formats
+          .filter((f) => f.ext === "mp4")
+          .sort((a, b) => (b.height || 0) - (a.height || 0))[0];
+        quality = bestFormat?.format_id || videoInfo.formats[0]?.format_id;
+      }
+
+      const body = { url: fixedUrl, quality };
 
       const response = await fetch(`${API_URL}/api/downloads`, {
         method: "POST",
