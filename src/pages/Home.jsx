@@ -143,56 +143,58 @@ function Home() {
     setDownloadingId(null);
   };
 
- const handleDirectDownload = async () => {
-  const fixedUrl = normalizeUrl(url);
-  const isFacebook = isFacebookUrl(fixedUrl);
+  const handleDirectDownload = async () => {
+    const fixedUrl = normalizeUrl(url);
+    if (!fixedUrl) return;
+    setDownloadingId("single");
 
-  // Allow download if Facebook even without selectedFormat
-  if (!fixedUrl || (!selectedFormat && !isFacebook)) return;
+    let filename = "video.mp4";
+    if (videoInfo && videoInfo.title) {
+      filename = videoInfo.title.replace(/[\\/:*?"<>|]/g, "_") + ".mp4";
+    }
 
-  setDownloadingId("single");
+    try {
+      // For Facebook, do NOT send quality
+      const body = isFacebookUrl(fixedUrl)
+        ? { url: fixedUrl }
+        : { url: fixedUrl, quality: selectedFormat };
 
-  let filename = "video.mp4";
-  if (videoInfo?.title) {
-    filename = videoInfo.title.replace(/[\\/:*?"<>|]/g, "_") + ".mp4";
-  }
+      const response = await fetch(`${API_URL}/api/downloads`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error("Network response was not ok");
 
-  try {
-    const response = await fetch(`${API_URL}/api/downloads`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: fixedUrl,
-        ...(selectedFormat ? { quality: selectedFormat } : {}), // only include quality if it's selected
-      }),
-    });
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
 
-    if (!response.ok) throw new Error("Network response was not ok");
-
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(url);
-  } catch (e) {
-    alert("Download failed.");
-  }
-
-  setDownloadingId(null);
-};
+      // Trigger download
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (e) {
+      alert("Download failed.");
+    }
+    setDownloadingId(null);
+  };
 
   const advancedDownloadPlaylist = async (video, onProgress) => {
     setDownloadingId(video.id);
     try {
-      const params = new URLSearchParams({
-        url: video.url,
-        quality: selectedFormats[video.id] || video.formats?.[0]?.format_id,
-      });
+      // For Facebook, do NOT send quality
+      const params = new URLSearchParams(
+        isFacebookUrl(video.url)
+          ? { url: video.url }
+          : {
+              url: video.url,
+              quality: selectedFormats[video.id] || video.formats?.[0]?.format_id,
+            }
+      );
       const downloadUrl = `${API_URL}/api/download?${params.toString()}`;
 
       // Get filename from video title
