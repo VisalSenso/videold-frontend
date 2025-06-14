@@ -166,6 +166,16 @@ function Home() {
       });
       if (!response.ok) throw new Error("Network response was not ok");
 
+      // Check if response is JSON (error)
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const error = await response.json();
+        alert(error.error || "Download failed.");
+        setDownloadingId(null);
+        return;
+      }
+
+      // Otherwise, treat as video
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
 
@@ -192,7 +202,8 @@ function Home() {
           ? { url: video.url }
           : {
               url: video.url,
-              quality: selectedFormats[video.id] || video.formats?.[0]?.format_id,
+              quality:
+                selectedFormats[video.id] || video.formats?.[0]?.format_id,
             }
       );
       const downloadUrl = `${API_URL}/api/download?${params.toString()}`;
